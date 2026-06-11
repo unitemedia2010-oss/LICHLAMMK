@@ -1,0 +1,3 @@
+email,password,employee_code,full_name,phone,role_type,team,min_days_per_month
+tts01@unite.test,12345678,TTS001,Nguyễn Văn Test,0900000001,TTS,MEDIA,12
+nvpt01@unite.test,12345678,NVPT001,Trần Thị Test,0900000002,NVPT,SALE,12

@@ -1,0 +1,33 @@
+HƯỚNG DẪN THAY FILE BẢN UI POLISHED
+
+1. Giải nén file unite-work-schedule-ui-polished.zip.
+2. Copy các file trong gói này đè lên web hiện tại theo đúng thư mục:
+   - index.html
+   - employee.html
+   - admin.html
+   - debug.html
+   - css/style.css
+   - css/employee-calendar-fix.css
+   - js/config.js
+   - js/auth.js
+   - js/employee.js
+   - js/admin.js
+
+3. Kiểm tra employee.html có đủ 2 dòng CSS:
+   <link rel="stylesheet" href="./css/style.css" />
+   <link rel="stylesheet" href="./css/employee-calendar-fix.css" />
+
+4. Kiểm tra js/config.js đang dùng link Supabase đúng:
+   https://moohpectkjtpbyrqeocq.supabase.co/
+
+5. Sau khi thay file, vào trình duyệt bấm Ctrl + Shift + R để reload mạnh.
+
+ĐÃ TỐI ƯU:
+- Giao diện tổng thể chỉnh chu hơn: nền, topbar, panel, card, nút, input, bảng, modal.
+- Trang nhân sự gọn hơn, ô lịch ít rối hơn.
+- Bỏ dòng thiếu/ổn/đông trong từng ô ngày.
+- Hover/tap mới hiện nút Đăng ký hoặc Xin nghỉ.
+- Chờ duyệt màu đỏ nhạt, duyệt rồi màu xanh nhạt.
+- Toast thông báo nổi rõ gần khu vực nút Đăng xuất.
+- Admin nhìn sạch hơn, bảng dễ đọc hơn.
+- Debug sửa đúng link Supabase.

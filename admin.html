@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Unite Work Schedule | Admin</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <header class="topbar admin">
+    <div>
+      <div class="brand-line">UNITE WORK SCHEDULE</div>
+      <h1>Trang Admin / Leader</h1>
+    </div>
+    <button id="logoutBtn" class="btn ghost light">Đăng xuất</button>
+  </header>
+
+  <main class="container">
+    <section class="grid four">
+      <div class="panel metric"><span>Chờ duyệt lịch</span><b id="pendingScheduleCount">0</b></div>
+      <div class="panel metric"><span>Đã duyệt tuần</span><b id="approvedWeekCount">0</b></div>
+      <div class="panel metric"><span>Chờ duyệt nghỉ</span><b id="pendingLeaveCount">0</b></div>
+      <div class="panel metric"><span>Tổng nhân sự</span><b id="employeeCount">0</b></div>
+    </section>
+
+
+
+    <section class="panel danger-zone">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Vùng nguy hiểm</p>
+          <h2>Xóa toàn bộ lịch làm</h2>
+          <p class="muted">Chỉ dùng khi cần reset dữ liệu lịch. Hệ thống sẽ gửi thông báo cho toàn bộ TTS/NVPT trước khi xóa.</p>
+        </div>
+        <button id="deleteAllScheduleBtn" class="btn danger" type="button">Xóa hết lịch làm</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Tổng quan theo tháng</p>
+          <h2>Tổng quan lịch làm</h2>
+        </div>
+        <div class="month-actions">
+          <button id="adminPrevMonthBtn" class="btn secondary" type="button">← Tháng trước</button>
+          <button id="adminTodayBtn" class="btn ghost" type="button">Tháng này</button>
+          <button id="adminNextMonthBtn" class="btn secondary" type="button">Tháng sau →</button>
+        </div>
+      </div>
+      <div id="adminMonthTitle" class="admin-month-title"></div>
+      <div class="calendar-legend admin-legend">
+        <span><i class="dot dot-pending"></i> Chờ duyệt</span>
+        <span><i class="dot dot-approved"></i> Đã duyệt</span>
+      </div>
+      <div class="calendar-shell admin-calendar-shell">
+        <div class="calendar-weekheads">
+          <div>Thứ 2</div><div>Thứ 3</div><div>Thứ 4</div><div>Thứ 5</div><div>Thứ 6</div><div>Thứ 7</div><div>CN</div>
+        </div>
+        <div id="adminMonthSummary" class="admin-month-calendar"></div>
+      </div>
+      <div class="admin-inline-filter">
+        <label>
+          Thứ 2 của tuần để lọc bảng bên dưới
+          <input id="adminWeekStart" type="date" />
+        </label>
+        <button id="adminLoadBtn" class="btn secondary" type="button">Tải dữ liệu bảng</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Xét duyệt lịch</p>
+          <h2>Yêu cầu đăng ký lịch đang chờ</h2>
+        </div>
+        <div class="actions">
+          <button id="approveSelectedBtn" class="btn primary">Duyệt đã chọn</button>
+          <button id="rejectSelectedBtn" class="btn danger">Từ chối đã chọn</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th><input id="checkAllSchedule" type="checkbox" /></th>
+              <th>Nhân sự</th>
+              <th>Loại</th>
+              <th>Team</th>
+              <th>Ngày</th>
+              <th>Ca</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody id="pendingScheduleTable"></tbody>
+        </table>
+      </div>
+      <p id="adminScheduleMessage" class="message"></p>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Xét duyệt nghỉ</p>
+          <h2>Yêu cầu xin nghỉ đang chờ</h2>
+        </div>
+        <div class="actions">
+          <button id="approveLeaveSelectedBtn" class="btn primary">Duyệt nghỉ đã chọn</button>
+          <button id="rejectLeaveSelectedBtn" class="btn danger">Từ chối nghỉ đã chọn</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th><input id="checkAllLeave" type="checkbox" /></th>
+              <th>Nhân sự</th>
+              <th>Ngày nghỉ</th>
+              <th>Ca</th>
+              <th>Lý do</th>
+              <th>Cảnh báo</th>
+              <th>Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody id="pendingLeaveTable"></tbody>
+        </table>
+      </div>
+      <p id="adminLeaveMessage" class="message"></p>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Lịch chính thức</p>
+          <h2>Danh sách lịch trong tuần</h2>
+        </div>
+        <button id="exportCsvBtn" class="btn ghost">Tải CSV</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nhân sự</th>
+              <th>Loại</th>
+              <th>Team</th>
+              <th>Ngày</th>
+              <th>Ca</th>
+              <th>Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody id="allScheduleTable"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+
+
+  <div id="deleteScheduleModal" class="uws-modal hidden">
+    <div class="uws-modal-backdrop" data-close-delete-modal></div>
+    <div class="uws-modal-card delete-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Xác nhận bảo mật</p>
+          <h2>Xóa toàn bộ lịch làm?</h2>
+          <p class="muted">Thao tác này sẽ xóa tất cả lịch làm và yêu cầu xin nghỉ liên quan. Trước khi xóa, hệ thống sẽ gửi thông báo đến toàn bộ tài khoản TTS/NVPT đang hoạt động.</p>
+        </div>
+        <button class="modal-close" type="button" data-close-delete-modal>×</button>
+      </div>
+
+      <div class="delete-warning-box">
+        <b>Lưu ý:</b>
+        <span>Thao tác không thể hoàn tác. Để xác nhận, admin phải nhập đúng mật khẩu đăng nhập hiện tại.</span>
+      </div>
+
+      <label class="full">
+        Nhập lại mật khẩu admin
+        <input id="deleteConfirmPassword" type="password" placeholder="Nhập mật khẩu để xác nhận xóa" autocomplete="current-password" />
+      </label>
+
+      <div class="actions modal-actions">
+        <button id="confirmDeleteAllScheduleBtn" class="btn danger" type="button">Xác nhận xóa</button>
+        <button class="btn ghost" type="button" data-close-delete-modal>Hủy</button>
+      </div>
+
+      <p id="deleteScheduleMessage" class="message"></p>
+    </div>
+  </div>
+
+  <script src="./js/config.js"></script>
+  <script src="./js/admin.js"></script>
+</body>
+</html>

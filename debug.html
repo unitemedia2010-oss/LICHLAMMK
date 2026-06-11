@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Unite Debug Supabase</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <style>
+    .debug-box {
+      max-width: 980px;
+      margin: 30px auto;
+      background: #fffaf4;
+      border: 1px solid #e5d8ca;
+      border-radius: 22px;
+      padding: 24px;
+      box-shadow: 0 20px 60px rgba(55,28,17,.10);
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #241c18;
+      color: #f8efe4;
+      border-radius: 16px;
+      padding: 16px;
+      min-height: 180px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .debug-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="debug-box">
+    <div class="brand-badge">UNITE DEBUG</div>
+    <h1>Kiểm tra kết nối Supabase</h1>
+    <p class="muted">Trang này dùng để tìm chính xác lỗi đăng nhập: sai URL, sai key, mạng chặn, CORS, hay sai mật khẩu.</p>
+
+    <div class="form-grid">
+      <label>
+        Email
+        <input id="email" type="email" value="unitemedia2010@gmail.com" />
+      </label>
+      <label>
+        Mật khẩu
+        <input id="password" type="password" value="20102020" />
+      </label>
+    </div>
+
+    <div class="debug-actions">
+      <button id="runHealth" class="btn secondary">1. Test Health</button>
+      <button id="runLogin" class="btn primary">2. Test Đăng nhập</button>
+      <button id="runProfile" class="btn ghost">3. Test Profile sau khi đăng nhập</button>
+      <button id="clearLog" class="btn danger">Xóa log</button>
+    </div>
+
+    <pre id="log"></pre>
+  </main>
+
+  <script>
+    const SUPABASE_URL = "https://moohpectkjtpbyrqeocq.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vb2hwZWN0a2p0cGJ5cnFlb2NxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNDE5NzEsImV4cCI6MjA5NjcxNzk3MX0.wOoq_SkvFJuLBYWIbGbJDFj7JfEK1_qHPt6uvlM5XcU";
+    let session = null;
+
+    const logEl = document.getElementById("log");
+
+    function log(title, value) {
+      const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      logEl.textContent += `\n===== ${title} =====\n${text}\n`;
+    }
+
+    function logError(title, err) {
+      logEl.textContent += `\n===== ${title} ERROR =====\n${err && err.stack ? err.stack : err}\n`;
+    }
+
+    async function testHealth() {
+      log("Browser URL", location.href);
+      log("Supabase URL đang dùng", SUPABASE_URL);
+      log("Online", navigator.onLine ? "Có mạng" : "Không có mạng");
+
+      try {
+        const res = await fetch(`${SUPABASE_URL}/auth/v1/health`, {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY
+          }
+        });
+        const text = await res.text();
+        log("Health status", `${res.status} ${res.statusText}`);
+        log("Health response", text);
+      } catch (err) {
+        logError("Health fetch", err);
+      }
+    }
+
+    async function testLogin() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+
+      try {
+        const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ email, password })
+        });
+
+        const text = await res.text();
+        let json;
+        try { json = JSON.parse(text); } catch { json = text; }
+
+        log("Login status", `${res.status} ${res.statusText}`);
+        log("Login response", json);
+
+        if (res.ok && json.access_token) {
+          session = json;
+          localStorage.setItem("uws_supabase_session", JSON.stringify(json));
+          log("Login result", "Đăng nhập OK. Đã lưu session vào localStorage.");
+        }
+      } catch (err) {
+        logError("Login fetch", err);
+      }
+    }
+
+    async function testProfile() {
+      try {
+        const saved = session || JSON.parse(localStorage.getItem("uws_supabase_session") || "null");
+        if (!saved?.access_token) {
+          log("Profile test", "Chưa có session. Bấm Test Đăng nhập trước.");
+          return;
+        }
+
+        const userId = saved.user?.id;
+        log("User ID từ Auth", userId);
+
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`, {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${saved.access_token}`
+          }
+        });
+
+        const text = await res.text();
+        let json;
+        try { json = JSON.parse(text); } catch { json = text; }
+
+        log("Profile status", `${res.status} ${res.statusText}`);
+        log("Profile response", json);
+      } catch (err) {
+        logError("Profile fetch", err);
+      }
+    }
+
+    document.getElementById("runHealth").addEventListener("click", testHealth);
+    document.getElementById("runLogin").addEventListener("click", testLogin);
+    document.getElementById("runProfile").addEventListener("click", testProfile);
+    document.getElementById("clearLog").addEventListener("click", () => logEl.textContent = "");
+
+    testHealth();
+  </script>
+</body>
+</html>

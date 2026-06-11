@@ -1,0 +1,22 @@
+HƯỚNG DẪN THAY FILE UI FIX
+
+1. Copy file employee.html trong gói này đè lên employee.html cũ.
+2. Copy file js/employee.js trong gói này đè lên js/employee.js cũ.
+3. Copy file css/employee-calendar-fix.css vào thư mục css/ của web.
+4. Kiểm tra employee.html có dòng:
+   <link rel="stylesheet" href="./css/employee-calendar-fix.css" />
+
+5. Mở file js/config.js của thư mục web chính.
+   Đổi SUPABASE_URL thành link đang chạy được:
+   https://moohpectkjtpbyrqeocq.supabase.co
+
+   Giữ nguyên SUPABASE_ANON_KEY hiện tại nếu hệ thống đang đăng nhập được.
+
+6. Quay lại trình duyệt, bấm Ctrl + Shift + R để reload mạnh.
+
+Nội dung đã sửa:
+- Bỏ ô "Thiếu người" khỏi từng ngày.
+- Nút Đăng ký / Xin nghỉ ẩn đi, chỉ hiện khi rê chuột hoặc nhấn vào ô ngày trên điện thoại.
+- Ngày chờ duyệt có nền đỏ nhạt.
+- Ngày đã duyệt có nền xanh nhạt.
+- Thêm popup thông báo góc phải, gần nút Đăng xuất.
