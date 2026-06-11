@@ -1,4 +1,6 @@
 const {
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
   supabase,
   ADMIN_ROLES,
   SHIFT_LABELS,
@@ -24,10 +26,21 @@ let allSchedules = [];
 const weekStartInput = document.getElementById("adminWeekStart");
 const adminMonthTitle = document.getElementById("adminMonthTitle");
 const adminMonthSummary = document.getElementById("adminMonthSummary");
+const profileSettingsTable = document.getElementById("profileSettingsTable");
+const profileSettingsMessage = document.getElementById("profileSettingsMessage");
+const createAccountMessage = document.getElementById("createAccountMessage");
+const accountAdminPanel = document.getElementById("accountAdminPanel");
+const dangerZonePanel = document.getElementById("dangerZonePanel");
 const TIME_META_REGEX = /\[\[UWS_TIME:(\d{2}:\d{2})-(\d{2}:\d{2})\]\]\s*/;
 const deleteScheduleModal = document.getElementById("deleteScheduleModal");
 const deleteConfirmPassword = document.getElementById("deleteConfirmPassword");
 const deleteScheduleMessage = document.getElementById("deleteScheduleMessage");
+
+const changePasswordModal = document.getElementById("changePasswordModal");
+const currentPasswordInput = document.getElementById("currentPasswordInput");
+const newPasswordInput = document.getElementById("newPasswordInput");
+const confirmNewPasswordInput = document.getElementById("confirmNewPasswordInput");
+const changePasswordMessage = document.getElementById("changePasswordMessage");
 
 function getWeekDates() {
   return Array.from({ length: 7 }, (_, i) => addDays(selectedWeekStart, i));
@@ -84,6 +97,63 @@ function requireShiftLabel(row) {
   return `${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? ` • ${meta.timeText}` : ""}`;
 }
 
+function displayProfileName(profile) {
+  const name = String(profile?.full_name || "").trim();
+  if (name && !name.includes("@")) return name;
+  return profile?.employee_code || profile?.email || "Nhân sự";
+}
+
+function isSuperAdmin() {
+  return currentProfile?.role_type === "SUPER_ADMIN";
+}
+
+function isAdmin() {
+  return currentProfile?.role_type === "ADMIN";
+}
+
+function isLeader() {
+  return currentProfile?.role_type === "LEADER";
+}
+
+function applyRoleBasedUi() {
+  const superOnlyEls = document.querySelectorAll(".super-admin-only");
+  superOnlyEls.forEach(el => el.classList.toggle("hidden", !isSuperAdmin()));
+
+  const roleLabel = isSuperAdmin() ? "SUPER_ADMIN" : isAdmin() ? "ADMIN" : isLeader() ? "LEADER" : currentProfile?.role_type || "USER";
+  const menuBtn = document.getElementById("accountMenuBtn");
+  if (menuBtn && !menuBtn.querySelector(".role-pill")) {
+    const pill = document.createElement("span");
+    pill.className = "role-pill";
+    pill.textContent = roleLabel;
+    menuBtn.insertBefore(pill, menuBtn.querySelector(".chevron"));
+  }
+}
+
+
+function closeAccountMenu() {
+  document.getElementById("accountMenu")?.classList.add("hidden");
+  document.getElementById("accountMenuBtn")?.setAttribute("aria-expanded", "false");
+}
+
+function toggleAccountMenu(event) {
+  event?.stopPropagation();
+  const menu = document.getElementById("accountMenu");
+  const btn = document.getElementById("accountMenuBtn");
+  if (!menu || !btn) return;
+
+  const willOpen = menu.classList.contains("hidden");
+  menu.classList.toggle("hidden", !willOpen);
+  btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 async function requireAdmin() {
   const result = await getCurrentUserAndProfile();
   currentUser = result.user;
@@ -99,6 +169,7 @@ async function requireAdmin() {
     return false;
   }
 
+  applyRoleBasedUi();
   return true;
 }
 
@@ -120,13 +191,191 @@ async function loadMetrics() {
   document.getElementById("employeeCount").textContent = employeeCount || 0;
 }
 
+async function loadProfileSettings() {
+  if (!profileSettingsTable || !isSuperAdmin()) return;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, employee_code, full_name, email, phone, role_type, team, status, min_days_per_month")
+    .in("role_type", ["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"])
+    .order("role_type", { ascending: true })
+    .order("employee_code", { ascending: true });
+
+  if (error) {
+    profileSettingsTable.innerHTML = `<tr><td colspan="8" class="empty-row">${error.message}</td></tr>`;
+    return;
+  }
+
+  if (!data?.length) {
+    profileSettingsTable.innerHTML = `<tr><td colspan="8" class="empty-row">Chưa có tài khoản để cấu hình.</td></tr>`;
+    return;
+  }
+
+  profileSettingsTable.innerHTML = data.map(profile => `
+    <tr data-profile-id="${profile.id}">
+      <td><b>${escapeHtml(profile.employee_code || "")}</b></td>
+      <td><input class="profile-name-input" type="text" value="${escapeHtml(profile.full_name || "")}" placeholder="Nhập họ tên" /></td>
+      <td><span class="muted">${escapeHtml(profile.email || "")}</span></td>
+      <td>
+        <select class="profile-role-input">
+          ${["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"].map(role => `<option value="${role}" ${profile.role_type === role ? "selected" : ""}>${role}</option>`).join("")}
+        </select>
+      </td>
+      <td><input class="profile-team-input" type="text" value="${escapeHtml(profile.team || "")}" placeholder="Team" /></td>
+      <td><input class="profile-target-input" type="number" min="0" max="31" value="${Number(profile.min_days_per_month || 0)}" /></td>
+      <td>
+        <select class="profile-status-input">
+          <option value="active" ${profile.status === "active" ? "selected" : ""}>active</option>
+          <option value="inactive" ${profile.status === "inactive" ? "selected" : ""}>inactive</option>
+        </select>
+      </td>
+      <td><button class="btn primary profile-save-btn" type="button" data-profile-id="${profile.id}">Lưu</button></td>
+    </tr>
+  `).join("");
+}
+
+async function updateProfileSetting(profileId) {
+  if (!isSuperAdmin()) {
+    showMessage(profileSettingsMessage, "Chỉ SUPER_ADMIN mới được quản trị tài khoản.", "err");
+    return;
+  }
+
+  const row = document.querySelector(`tr[data-profile-id="${profileId}"]`);
+  if (!row) return;
+
+  const fullName = row.querySelector(".profile-name-input")?.value.trim();
+  const roleType = row.querySelector(".profile-role-input")?.value;
+  const team = row.querySelector(".profile-team-input")?.value.trim();
+  const minDays = Number(row.querySelector(".profile-target-input")?.value || 0);
+  const status = row.querySelector(".profile-status-input")?.value;
+
+  if (!fullName || fullName.length < 2) {
+    showMessage(profileSettingsMessage, "Vui lòng nhập họ tên hợp lệ.", "err");
+    return;
+  }
+
+  if (Number.isNaN(minDays) || minDays < 0 || minDays > 31) {
+    showMessage(profileSettingsMessage, "Chỉ tiêu tháng phải từ 0 đến 31 ngày.", "err");
+    return;
+  }
+
+  showMessage(profileSettingsMessage, "Đang lưu cấu hình nhân sự...");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      full_name: fullName,
+      role_type: roleType,
+      team: team || null,
+      min_days_per_month: minDays,
+      status
+    })
+    .eq("id", profileId);
+
+  if (error) {
+    showMessage(profileSettingsMessage, error.message, "err");
+    return;
+  }
+
+  showMessage(profileSettingsMessage, "Đã lưu cấu hình nhân sự.", "ok");
+  await refreshAll();
+}
+
+function getAccountFormPayload() {
+  return {
+    email: document.getElementById("newAccountEmail")?.value.trim() || "",
+    password: document.getElementById("newAccountPassword")?.value || "",
+    employee_code: document.getElementById("newAccountCode")?.value.trim() || "",
+    full_name: document.getElementById("newAccountName")?.value.trim() || "",
+    role_type: document.getElementById("newAccountRole")?.value || "TTS",
+    team: document.getElementById("newAccountTeam")?.value.trim() || null,
+    min_days_per_month: Number(document.getElementById("newAccountTarget")?.value || 0),
+    status: document.getElementById("newAccountStatus")?.value || "active"
+  };
+}
+
+function clearAccountForm() {
+  ["newAccountEmail", "newAccountPassword", "newAccountCode", "newAccountName"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  const team = document.getElementById("newAccountTeam");
+  const target = document.getElementById("newAccountTarget");
+  const role = document.getElementById("newAccountRole");
+  const status = document.getElementById("newAccountStatus");
+  if (team) team.value = "UNITE";
+  if (target) target.value = "12";
+  if (role) role.value = "TTS";
+  if (status) status.value = "active";
+  showMessage(createAccountMessage, "");
+}
+
+function validateAccountPayload(payload) {
+  if (!payload.email || !payload.email.includes("@")) return "Email đăng nhập chưa hợp lệ.";
+  if (!payload.password || payload.password.length < 8) return "Mật khẩu tạm cần tối thiểu 8 ký tự.";
+  if (!payload.employee_code || payload.employee_code.length < 3) return "Mã nhân sự chưa hợp lệ.";
+  if (!payload.full_name || payload.full_name.length < 2) return "Họ tên hiển thị chưa hợp lệ.";
+  if (!Number.isFinite(payload.min_days_per_month) || payload.min_days_per_month < 0 || payload.min_days_per_month > 31) return "Chỉ tiêu tháng phải từ 0 đến 31 ngày.";
+  if (!["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"].includes(payload.role_type)) return "Vai trò chưa hợp lệ.";
+  return "";
+}
+
+async function createAccount() {
+  if (!isSuperAdmin()) {
+    showMessage(createAccountMessage, "Chỉ SUPER_ADMIN mới được tạo tài khoản.", "err");
+    return;
+  }
+
+  const payload = getAccountFormPayload();
+  const validationError = validateAccountPayload(payload);
+  if (validationError) {
+    showMessage(createAccountMessage, validationError, "err");
+    return;
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) {
+    showMessage(createAccountMessage, "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", "err");
+    return;
+  }
+
+  showMessage(createAccountMessage, "Đang tạo tài khoản qua Edge Function admin-create-user...");
+
+  try {
+    const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/admin-create-user`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const message = json.message || json.error || `${res.status} ${res.statusText}`;
+      showMessage(createAccountMessage, `Không tạo được tài khoản: ${message}`, "err");
+      return;
+    }
+
+    showMessage(createAccountMessage, "Đã tạo tài khoản và hồ sơ nhân sự.", "ok");
+    clearAccountForm();
+    await refreshAll();
+  } catch (err) {
+    showMessage(createAccountMessage, `Không gọi được Edge Function. Hãy deploy admin-create-user trước. Chi tiết: ${err.message}`, "err");
+  }
+}
+
 async function loadMonthSummary() {
   const startIso = toISODate(getAdminMonthStart());
   const endIso = toISODate(getAdminMonthEnd());
 
   const { data, error } = await supabase
     .from("schedule_requests")
-    .select("id, work_date, shift, status, note, profiles:employee_id(full_name, employee_code, team)")
+    .select("id, work_date, shift, status, note, profiles:employee_id(full_name, employee_code, team, email)")
     .gte("work_date", startIso)
     .lte("work_date", endIso)
     .in("status", ["pending", "approved"])
@@ -159,7 +408,7 @@ async function loadMonthSummary() {
     const eventsHtml = rows.length
       ? rows.map(row => `
           <div class="admin-event ${row.status}">
-            <div class="admin-event-name">${row.profiles?.full_name || row.profiles?.employee_code || "Nhân sự"}</div>
+            <div class="admin-event-name">${displayProfileName(row.profiles)}</div>
             <div class="admin-event-meta">${requireShiftLabel(row)}</div>
           </div>
         `).join("")
@@ -208,7 +457,7 @@ async function loadPendingSchedules() {
     return `
       <tr>
         <td><input type="checkbox" class="schedule-check" value="${row.id}" /></td>
-        <td><b>${row.profiles?.full_name || ""}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
+        <td><b>${displayProfileName(row.profiles)}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
         <td>${row.profiles?.role_type || ""}</td>
         <td>${row.profiles?.team || ""}</td>
         <td>${formatDate(row.work_date)}</td>
@@ -241,7 +490,7 @@ async function loadPendingLeaves() {
   tbody.innerHTML = data.map(row => `
     <tr>
       <td><input type="checkbox" class="leave-check" value="${row.id}" /></td>
-      <td><b>${row.profiles?.full_name || ""}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
+      <td><b>${displayProfileName(row.profiles)}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
       <td>${formatDate(row.leave_date)}</td>
       <td>${SHIFT_LABELS[row.shift] || row.shift}</td>
       <td>${REASON_LABELS[row.leave_type] || row.leave_type}</td>
@@ -281,7 +530,7 @@ async function loadAllSchedules() {
     const meta = parseScheduleNote(row.note);
     return `
       <tr>
-        <td><b>${row.profiles?.full_name || ""}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
+        <td><b>${displayProfileName(row.profiles)}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
         <td>${row.profiles?.role_type || ""}</td>
         <td>${row.profiles?.team || ""}</td>
         <td>${formatDate(row.work_date)}</td>
@@ -351,7 +600,92 @@ async function updateLeaves(status) {
 }
 
 
+
+function clearPasswordForm() {
+  if (currentPasswordInput) currentPasswordInput.value = "";
+  if (newPasswordInput) newPasswordInput.value = "";
+  if (confirmNewPasswordInput) confirmNewPasswordInput.value = "";
+  showMessage(changePasswordMessage, "");
+}
+
+function openChangePasswordModal() {
+  clearPasswordForm();
+  changePasswordModal?.classList.remove("hidden");
+  setTimeout(() => currentPasswordInput?.focus(), 50);
+}
+
+function closeChangePasswordModal() {
+  changePasswordModal?.classList.add("hidden");
+  clearPasswordForm();
+}
+
+async function submitChangePassword() {
+  const currentPassword = currentPasswordInput?.value || "";
+  const newPassword = newPasswordInput?.value || "";
+  const confirmPassword = confirmNewPasswordInput?.value || "";
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    showMessage(changePasswordMessage, "Vui lòng nhập đầy đủ thông tin.", "err");
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    showMessage(changePasswordMessage, "Mật khẩu mới cần tối thiểu 8 ký tự.", "err");
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showMessage(changePasswordMessage, "Mật khẩu mới nhập lại chưa khớp.", "err");
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    showMessage(changePasswordMessage, "Mật khẩu mới không nên trùng mật khẩu hiện tại.", "err");
+    return;
+  }
+
+  const email = currentUser?.email || currentProfile?.email;
+  if (!email) {
+    showMessage(changePasswordMessage, "Không tìm thấy email tài khoản. Vui lòng đăng nhập lại.", "err");
+    return;
+  }
+
+  showMessage(changePasswordMessage, "Đang xác thực mật khẩu hiện tại...");
+
+  const verifyRes = await supabase.auth.signInWithPassword({
+    email,
+    password: currentPassword
+  });
+
+  if (verifyRes.error) {
+    showMessage(changePasswordMessage, "Mật khẩu hiện tại chưa đúng.", "err");
+    return;
+  }
+
+  showMessage(changePasswordMessage, "Mật khẩu hiện tại đúng. Đang cập nhật mật khẩu mới...");
+
+  const updateRes = await supabase.auth.updateUser({
+    password: newPassword
+  });
+
+  if (updateRes.error) {
+    showMessage(changePasswordMessage, `Không đổi được mật khẩu: ${updateRes.error.message}`, "err");
+    return;
+  }
+
+  showMessage(changePasswordMessage, "Đổi mật khẩu thành công.", "ok");
+
+  setTimeout(() => {
+    closeChangePasswordModal();
+  }, 700);
+}
+
+
 function openDeleteScheduleModal() {
+  if (!isSuperAdmin()) {
+    alert("Chỉ SUPER_ADMIN mới được xóa toàn bộ lịch làm.");
+    return;
+  }
   showMessage(deleteScheduleMessage, "");
   if (deleteConfirmPassword) deleteConfirmPassword.value = "";
   deleteScheduleModal?.classList.remove("hidden");
@@ -365,6 +699,11 @@ function closeDeleteScheduleModal() {
 }
 
 async function confirmDeleteAllSchedules() {
+  if (!isSuperAdmin()) {
+    showMessage(deleteScheduleMessage, "Chỉ SUPER_ADMIN mới được xóa toàn bộ lịch làm.", "err");
+    return;
+  }
+
   const password = deleteConfirmPassword?.value || "";
 
   if (!password) {
@@ -487,6 +826,7 @@ async function logout() {
 
 async function refreshAll() {
   await loadMetrics();
+  await loadProfileSettings();
   await loadMonthSummary();
   await loadPendingSchedules();
   await loadPendingLeaves();
@@ -494,11 +834,33 @@ async function refreshAll() {
 }
 
 document.getElementById("logoutBtn")?.addEventListener("click", logout);
+document.getElementById("accountMenuBtn")?.addEventListener("click", toggleAccountMenu);
+document.getElementById("accountMenu")?.addEventListener("click", event => event.stopPropagation());
+document.getElementById("changePasswordBtn")?.addEventListener("click", () => { closeAccountMenu(); openChangePasswordModal(); });
+document.addEventListener("click", event => {
+  if (!event.target.closest(".account-menu-wrap")) closeAccountMenu();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeAccountMenu();
+});
+document.getElementById("submitChangePasswordBtn")?.addEventListener("click", submitChangePassword);
+document.querySelectorAll("[data-close-password-modal]").forEach(el => {
+  el.addEventListener("click", closeChangePasswordModal);
+});
 document.getElementById("deleteAllScheduleBtn")?.addEventListener("click", openDeleteScheduleModal);
 document.getElementById("confirmDeleteAllScheduleBtn")?.addEventListener("click", confirmDeleteAllSchedules);
 document.querySelectorAll("[data-close-delete-modal]").forEach(el => {
   el.addEventListener("click", closeDeleteScheduleModal);
 });
+document.getElementById("refreshProfilesBtn")?.addEventListener("click", loadProfileSettings);
+document.getElementById("createAccountBtn")?.addEventListener("click", createAccount);
+document.getElementById("clearAccountFormBtn")?.addEventListener("click", clearAccountForm);
+profileSettingsTable?.addEventListener("click", event => {
+  const btn = event.target.closest(".profile-save-btn");
+  if (!btn) return;
+  updateProfileSetting(btn.dataset.profileId);
+});
+
 document.getElementById("adminLoadBtn")?.addEventListener("click", async () => {
   selectedWeekStart = getMonday(new Date(weekStartInput.value + "T00:00:00"));
   weekStartInput.value = toISODate(selectedWeekStart);
@@ -528,7 +890,10 @@ document.getElementById("checkAllSchedule")?.addEventListener("change", e => {
   document.querySelectorAll(".schedule-check").forEach(cb => cb.checked = e.target.checked);
 });
 document.addEventListener("keydown", event => {
-  if (event.key === "Escape") closeDeleteScheduleModal();
+  if (event.key === "Escape") {
+    closeDeleteScheduleModal();
+    closeChangePasswordModal();
+  }
 });
 
 document.getElementById("checkAllLeave")?.addEventListener("change", e => {

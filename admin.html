@@ -10,9 +10,21 @@
   <header class="topbar admin">
     <div>
       <div class="brand-line">UNITE WORK SCHEDULE</div>
-      <h1>Trang Admin / Leader</h1>
+      <h1>Trang quản trị lịch</h1>
     </div>
-    <button id="logoutBtn" class="btn ghost light">Đăng xuất</button>
+    <div class="topbar-actions">
+      <div class="account-menu-wrap">
+        <button id="accountMenuBtn" class="btn ghost light account-menu-btn" type="button" aria-expanded="false">
+          <span>👤</span>
+          <span>Tài khoản</span>
+          <span class="chevron">▾</span>
+        </button>
+        <div id="accountMenu" class="account-menu hidden">
+          <button id="changePasswordBtn" type="button">Đổi mật khẩu</button>
+          <button id="logoutBtn" type="button" class="danger-link">Đăng xuất</button>
+        </div>
+      </div>
+    </div>
   </header>
 
   <main class="container">
@@ -23,18 +35,86 @@
       <div class="panel metric"><span>Tổng nhân sự</span><b id="employeeCount">0</b></div>
     </section>
 
-
-
-    <section class="panel danger-zone">
+    <section id="accountAdminPanel" class="panel profile-settings-panel super-admin-only hidden">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Vùng nguy hiểm</p>
-          <h2>Xóa toàn bộ lịch làm</h2>
-          <p class="muted">Chỉ dùng khi cần reset dữ liệu lịch. Hệ thống sẽ gửi thông báo cho toàn bộ TTS/NVPT trước khi xóa.</p>
+          <p class="eyebrow">SUPER ADMIN</p>
+          <h2>Quản trị tài khoản</h2>
+          <p class="muted">Chỉ SUPER_ADMIN được tạo tài khoản, sửa vai trò, team, chỉ tiêu tháng và khóa/mở hồ sơ. Leader không thấy mục này.</p>
         </div>
-        <button id="deleteAllScheduleBtn" class="btn danger" type="button">Xóa hết lịch làm</button>
+        <button id="refreshProfilesBtn" class="btn ghost" type="button">Làm mới tài khoản</button>
       </div>
+
+      <div class="account-create-card">
+        <div class="section-head compact-head">
+          <div>
+            <p class="eyebrow">Tạo tài khoản mới</p>
+            <h3>Thêm nhân sự / TTS / Leader</h3>
+            <p class="muted">Tính năng này cần deploy Supabase Edge Function <b>admin-create-user</b> để giữ service_role key an toàn.</p>
+          </div>
+        </div>
+
+        <div class="form-grid account-create-grid">
+          <label>Email đăng nhập <input id="newAccountEmail" type="email" placeholder="email@unite.vn" autocomplete="off" /></label>
+          <label>Mật khẩu tạm <input id="newAccountPassword" type="password" placeholder="Tối thiểu 8 ký tự" autocomplete="new-password" /></label>
+          <label>Mã nhân sự <input id="newAccountCode" type="text" placeholder="VD: TTS_LYNNHMEI" /></label>
+          <label>Họ tên hiển thị <input id="newAccountName" type="text" placeholder="Nhập đúng họ tên" /></label>
+          <label>
+            Vai trò
+            <select id="newAccountRole">
+              <option value="TTS">TTS</option>
+              <option value="NVPT">NVPT</option>
+              <option value="LEADER">LEADER</option>
+              <option value="ADMIN">ADMIN</option>
+              <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+            </select>
+          </label>
+          <label>Team <input id="newAccountTeam" type="text" placeholder="VD: UNITE" value="UNITE" /></label>
+          <label>Chỉ tiêu tháng <input id="newAccountTarget" type="number" min="0" max="31" value="12" /></label>
+          <label>
+            Trạng thái
+            <select id="newAccountStatus">
+              <option value="active">active</option>
+              <option value="inactive">inactive</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions modal-actions">
+          <button id="createAccountBtn" class="btn primary" type="button">Tạo tài khoản</button>
+          <button id="clearAccountFormBtn" class="btn ghost" type="button">Xóa form</button>
+        </div>
+        <p id="createAccountMessage" class="message"></p>
+      </div>
+
+      <div class="section-head compact-head account-table-head">
+        <div>
+          <p class="eyebrow">Danh sách tài khoản</p>
+          <h3>Cấu hình hồ sơ & chỉ tiêu</h3>
+        </div>
+      </div>
+
+      <div class="table-wrap profile-settings-wrap">
+        <table class="profile-settings-table">
+          <thead>
+            <tr>
+              <th>Mã</th>
+              <th>Họ tên hiển thị</th>
+              <th>Email</th>
+              <th>Vai trò</th>
+              <th>Team</th>
+              <th>Chỉ tiêu tháng</th>
+              <th>Trạng thái</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="profileSettingsTable"></tbody>
+        </table>
+      </div>
+      <p id="profileSettingsMessage" class="message"></p>
     </section>
+
+
+
 
     <section class="panel">
       <div class="section-head">
@@ -155,6 +235,18 @@
         </table>
       </div>
     </section>
+
+
+<section id="dangerZonePanel" class="panel danger-zone super-admin-only hidden">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Vùng nguy hiểm</p>
+          <h2>Xóa toàn bộ lịch làm</h2>
+          <p class="muted">Chỉ SUPER_ADMIN được reset dữ liệu lịch. Hệ thống sẽ gửi thông báo cho toàn bộ TTS/NVPT trước khi xóa.</p>
+        </div>
+        <button id="deleteAllScheduleBtn" class="btn danger" type="button">Xóa hết lịch làm</button>
+      </div>
+    </section>
   </main>
 
 
@@ -187,6 +279,48 @@
       </div>
 
       <p id="deleteScheduleMessage" class="message"></p>
+    </div>
+  </div>
+
+
+  <div id="changePasswordModal" class="uws-modal hidden">
+    <div class="uws-modal-backdrop" data-close-password-modal></div>
+    <div class="uws-modal-card password-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Bảo mật tài khoản</p>
+          <h2>Đổi mật khẩu</h2>
+          <p class="muted">Leader/Admin nhập mật khẩu hiện tại để xác nhận trước khi đổi mật khẩu mới.</p>
+        </div>
+        <button class="modal-close" type="button" data-close-password-modal>×</button>
+      </div>
+
+      <div class="form-stack password-form">
+        <label>
+          Mật khẩu hiện tại
+          <input id="currentPasswordInput" type="password" placeholder="Nhập mật khẩu đang dùng" autocomplete="current-password" />
+        </label>
+        <label>
+          Mật khẩu mới
+          <input id="newPasswordInput" type="password" placeholder="Tối thiểu 8 ký tự" autocomplete="new-password" />
+        </label>
+        <label>
+          Nhập lại mật khẩu mới
+          <input id="confirmNewPasswordInput" type="password" placeholder="Nhập lại mật khẩu mới" autocomplete="new-password" />
+        </label>
+      </div>
+
+      <div class="password-rules">
+        <span>Mật khẩu mới nên có ít nhất 8 ký tự.</span>
+        <span>Sau khi đổi thành công, có thể tiếp tục dùng phiên hiện tại hoặc đăng xuất đăng nhập lại.</span>
+      </div>
+
+      <div class="actions modal-actions">
+        <button id="submitChangePasswordBtn" class="btn primary" type="button">Cập nhật mật khẩu</button>
+        <button class="btn ghost" type="button" data-close-password-modal>Hủy</button>
+      </div>
+
+      <p id="changePasswordMessage" class="message"></p>
     </div>
   </div>
 

@@ -213,6 +213,10 @@
         }
       },
 
+      async getSession() {
+        return { data: { session: getSession() }, error: null };
+      },
+
       async getUser() {
         const session = getSession();
         if (!session?.access_token) {
@@ -234,6 +238,33 @@
           return { data: { user: json }, error: null };
         } catch (err) {
           return { data: { user: null }, error: { message: err.message } };
+        }
+      },
+
+      async updateUser(payload) {
+        try {
+          const session = getSession();
+          if (!session?.access_token) {
+            return { data: null, error: { message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại." } };
+          }
+
+          const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+            method: "PUT",
+            headers: authHeaders({
+              "Content-Type": "application/json"
+            }),
+            body: JSON.stringify(payload || {})
+          });
+
+          const json = await res.json();
+
+          if (!res.ok) {
+            return { data: null, error: { message: json.msg || json.message || json.error_description || "Update user failed" } };
+          }
+
+          return { data: { user: json }, error: null };
+        } catch (err) {
+          return { data: null, error: { message: err.message } };
         }
       },
 
@@ -345,6 +376,8 @@
   }
 
   window.UWS = {
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     supabase: supabaseClient,
     ADMIN_ROLES,
     SHIFT_LABELS,

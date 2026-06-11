@@ -30,6 +30,10 @@ const TIME_META_REGEX = /\[\[UWS_TIME:(\d{2}:\d{2})-(\d{2}:\d{2})\]\]\s*/;
 
 const welcomeName = document.getElementById("welcomeName");
 const profileLine = document.getElementById("profileLine");
+const profileModal = document.getElementById("profileModal");
+const profileFullNameInput = document.getElementById("profileFullNameInput");
+const profilePhoneInput = document.getElementById("profilePhoneInput");
+const profileMessage = document.getElementById("profileMessage");
 
 const approvedDaysEl = document.getElementById("approvedDays");
 const pendingDaysEl = document.getElementById("pendingDays");
@@ -65,6 +69,12 @@ const leaveMessage = document.getElementById("leaveMessage");
 const notificationModal = document.getElementById("notificationModal");
 const notificationList = document.getElementById("notificationList");
 const notificationBadge = document.getElementById("notificationBadge");
+
+const changePasswordModal = document.getElementById("changePasswordModal");
+const currentPasswordInput = document.getElementById("currentPasswordInput");
+const newPasswordInput = document.getElementById("newPasswordInput");
+const confirmNewPasswordInput = document.getElementById("confirmNewPasswordInput");
+const changePasswordMessage = document.getElementById("changePasswordMessage");
 
 const myScheduleTable = document.getElementById("myScheduleTable");
 
@@ -594,12 +604,176 @@ function openLeaveModal(dateIso) {
   leaveModal.classList.remove("hidden");
 }
 
+function renderProfileHeader() {
+  const displayName = String(currentProfile?.full_name || "").trim()
+    || currentProfile?.employee_code
+    || currentProfile?.email
+    || "bạn";
+
+  if (welcomeName) welcomeName.textContent = `Xin chào, ${displayName}`;
+  if (profileLine) {
+    profileLine.textContent = `${currentProfile?.employee_code || "Chưa có mã"} • ${currentProfile?.role_type || ""} • ${currentProfile?.team || "Chưa có team"}`;
+  }
+  if (targetDaysEl) targetDaysEl.textContent = currentProfile?.min_days_per_month || 0;
+}
+
+function closeAccountMenu() {
+  document.getElementById("accountMenu")?.classList.add("hidden");
+  document.getElementById("accountMenuBtn")?.setAttribute("aria-expanded", "false");
+}
+
+function toggleAccountMenu(event) {
+  event?.stopPropagation();
+  const menu = document.getElementById("accountMenu");
+  const btn = document.getElementById("accountMenuBtn");
+  if (!menu || !btn) return;
+
+  const willOpen = menu.classList.contains("hidden");
+  menu.classList.toggle("hidden", !willOpen);
+  btn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+}
+
+function openProfileModal() {
+  if (profileFullNameInput) profileFullNameInput.value = currentProfile?.full_name || "";
+  if (profilePhoneInput) profilePhoneInput.value = currentProfile?.phone || "";
+  showMessage(profileMessage, "");
+  profileModal?.classList.remove("hidden");
+  setTimeout(() => profileFullNameInput?.focus(), 50);
+}
+
+async function submitProfileUpdate() {
+  const fullName = profileFullNameInput?.value.trim() || "";
+  const phone = profilePhoneInput?.value.trim() || "";
+
+  if (!fullName || fullName.length < 2) {
+    showMessage(profileMessage, "Vui lòng nhập họ tên hợp lệ.", "err");
+    return;
+  }
+
+  showMessage(profileMessage, "Đang lưu hồ sơ...");
+
+  const { data, error } = await supabase.rpc("update_my_profile", {
+    p_full_name: fullName,
+    p_phone: phone || null
+  });
+
+  if (error) {
+    showMessage(profileMessage, `Không lưu được hồ sơ. Hãy chạy database/upgrade-v6.sql trước. Chi tiết: ${error.message}`, "err");
+    return;
+  }
+
+  currentProfile = {
+    ...currentProfile,
+    full_name: data?.full_name || fullName,
+    phone: data?.phone || phone
+  };
+
+  renderProfileHeader();
+  addNotification({
+    title: "Đã cập nhật hồ sơ",
+    message: "Tên hiển thị của bạn đã được cập nhật.",
+    type: "ok"
+  });
+  showMessage(profileMessage, "Đã lưu hồ sơ.", "ok");
+  showToast("Đã cập nhật tên hiển thị.", "ok");
+
+  setTimeout(() => {
+    closeModals();
+  }, 700);
+}
+
 function closeModals() {
   registerModal.classList.add("hidden");
   leaveModal.classList.add("hidden");
   notificationModal?.classList.add("hidden");
+  profileModal?.classList.add("hidden");
+  changePasswordModal?.classList.add("hidden");
   activeRegisterDate = null;
 }
+
+
+function clearPasswordForm() {
+  if (currentPasswordInput) currentPasswordInput.value = "";
+  if (newPasswordInput) newPasswordInput.value = "";
+  if (confirmNewPasswordInput) confirmNewPasswordInput.value = "";
+  showMessage(changePasswordMessage, "");
+}
+
+function openChangePasswordModal() {
+  clearPasswordForm();
+  changePasswordModal?.classList.remove("hidden");
+  setTimeout(() => currentPasswordInput?.focus(), 50);
+}
+
+async function submitChangePassword() {
+  const currentPassword = currentPasswordInput?.value || "";
+  const newPassword = newPasswordInput?.value || "";
+  const confirmPassword = confirmNewPasswordInput?.value || "";
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    showMessage(changePasswordMessage, "Vui lòng nhập đầy đủ thông tin.", "err");
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    showMessage(changePasswordMessage, "Mật khẩu mới cần tối thiểu 8 ký tự.", "err");
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showMessage(changePasswordMessage, "Mật khẩu mới nhập lại chưa khớp.", "err");
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    showMessage(changePasswordMessage, "Mật khẩu mới không nên trùng mật khẩu hiện tại.", "err");
+    return;
+  }
+
+  const email = currentUser?.email || currentProfile?.email;
+  if (!email) {
+    showMessage(changePasswordMessage, "Không tìm thấy email tài khoản. Vui lòng đăng nhập lại.", "err");
+    return;
+  }
+
+  showMessage(changePasswordMessage, "Đang xác thực mật khẩu hiện tại...");
+
+  const verifyRes = await supabase.auth.signInWithPassword({
+    email,
+    password: currentPassword
+  });
+
+  if (verifyRes.error) {
+    showMessage(changePasswordMessage, "Mật khẩu hiện tại chưa đúng.", "err");
+    return;
+  }
+
+  showMessage(changePasswordMessage, "Mật khẩu hiện tại đúng. Đang cập nhật mật khẩu mới...");
+
+  const updateRes = await supabase.auth.updateUser({
+    password: newPassword
+  });
+
+  if (updateRes.error) {
+    showMessage(changePasswordMessage, `Không đổi được mật khẩu: ${updateRes.error.message}`, "err");
+    return;
+  }
+
+  addNotification({
+    title: "Đã đổi mật khẩu",
+    message: "Mật khẩu tài khoản của bạn vừa được cập nhật thành công.",
+    type: "ok"
+  });
+
+  showMessage(changePasswordMessage, "Đổi mật khẩu thành công.", "ok");
+  showToast("Đổi mật khẩu thành công.", "ok");
+
+  setTimeout(() => {
+    closeModals();
+    clearPasswordForm();
+  }, 700);
+}
+
 
 async function submitRegister() {
   if (!activeRegisterDate) return;
@@ -841,8 +1015,7 @@ async function requireLogin() {
     return false;
   }
 
-  welcomeName.textContent = `Xin chào, ${currentProfile.full_name}`;
-  profileLine.textContent = `${currentProfile.employee_code} • ${currentProfile.role_type} • ${currentProfile.team || "Chưa có team"}`;
+  renderProfileHeader();
   targetDaysEl.textContent = currentProfile.min_days_per_month || 0;
 
   return true;
@@ -855,6 +1028,12 @@ async function logout() {
 
 function bindEvents() {
   document.getElementById("logoutBtn")?.addEventListener("click", logout);
+  document.getElementById("accountMenuBtn")?.addEventListener("click", toggleAccountMenu);
+  document.getElementById("accountMenu")?.addEventListener("click", event => event.stopPropagation());
+  document.getElementById("editProfileBtn")?.addEventListener("click", () => { closeAccountMenu(); openProfileModal(); });
+  document.getElementById("submitProfileBtn")?.addEventListener("click", submitProfileUpdate);
+  document.getElementById("changePasswordBtn")?.addEventListener("click", () => { closeAccountMenu(); openChangePasswordModal(); });
+  document.getElementById("submitChangePasswordBtn")?.addEventListener("click", submitChangePassword);
   document.getElementById("notificationBtn")?.addEventListener("click", () => openNotificationModal());
   document.getElementById("clearNotificationsBtn")?.addEventListener("click", clearNotifications);
 
@@ -903,6 +1082,10 @@ function bindEvents() {
     if (!event.target.closest(".calendar-cell") && !event.target.closest(".topbar-actions") && !event.target.closest(".uws-modal-card")) {
       document.querySelectorAll(".calendar-cell.is-open").forEach(item => item.classList.remove("is-open"));
     }
+
+    if (!event.target.closest(".account-menu-wrap")) {
+      closeAccountMenu();
+    }
   });
 
   document.getElementById("submitRegisterBtn")?.addEventListener("click", submitRegister);
@@ -918,7 +1101,10 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape") closeModals();
+    if (event.key === "Escape") {
+      closeModals();
+      closeAccountMenu();
+    }
   });
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
