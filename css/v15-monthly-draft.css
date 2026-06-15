@@ -1,0 +1,380 @@
+/* =========================================
+   V15 - MONTHLY DRAFT WORKFLOW
+   Chọn lịch -> xem lại -> nộp một lần
+========================================= */
+
+:root {
+  --draft-brand: #7b2636;
+  --draft-brand-soft: #f8edf0;
+  --draft-green: #23835a;
+  --draft-green-soft: #edf8f2;
+  --draft-blue: #2b6fa3;
+  --draft-blue-soft: #edf6fc;
+  --draft-orange: #b66a10;
+  --draft-orange-soft: #fff7e9;
+  --draft-off: #666b73;
+  --draft-off-soft: #f1f2f4;
+}
+
+.draft-review-panel {
+  border-top: 3px solid var(--draft-brand);
+}
+
+.draft-review-head {
+  align-items: center;
+}
+
+.draft-review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.draft-count-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--draft-brand-soft);
+  color: var(--draft-brand);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.draft-review-list {
+  display: grid;
+  gap: 10px;
+}
+
+.draft-review-item {
+  display: grid;
+  grid-template-columns: 76px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #e4e6ea;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.draft-review-item.is-off {
+  background: #fafafa;
+  border-style: dashed;
+}
+
+.draft-date-box {
+  display: grid;
+  place-items: center;
+  min-height: 58px;
+  border-radius: 12px;
+  background: #f5f6f8;
+}
+
+.draft-date-box b {
+  color: #17181a;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.draft-date-box span {
+  color: #777b82;
+  font-size: 10px;
+}
+
+.draft-item-copy {
+  min-width: 0;
+}
+
+.draft-item-copy strong,
+.draft-item-copy small {
+  display: block;
+}
+
+.draft-item-copy strong {
+  color: #25262a;
+  font-size: 14px;
+}
+
+.draft-item-copy small {
+  margin-top: 4px;
+  color: #7b7f86;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.compact-btn {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.btn.danger-soft {
+  color: #a93742;
+  background: #fff1f2;
+  border: 1px solid #f2cfd3;
+}
+
+.btn.danger-soft:hover {
+  background: #ffe7e9;
+}
+
+/* Popup chọn lịch */
+.schedule-choice-modal {
+  width: min(620px, 100%);
+}
+
+.schedule-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.schedule-choice-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0,1fr) 24px;
+  align-items: center;
+  gap: 12px;
+  min-height: 84px;
+  padding: 14px;
+  border: 1px solid #e0e3e7;
+  border-radius: 16px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+
+.schedule-choice-card:hover {
+  transform: translateY(-1px);
+  border-color: #c9cdd3;
+  box-shadow: 0 8px 22px rgba(24, 29, 38, .07);
+}
+
+.schedule-choice-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.choice-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.full-day .choice-icon { color: var(--draft-brand); background: var(--draft-brand-soft); }
+.morning .choice-icon { color: var(--draft-orange); background: var(--draft-orange-soft); }
+.afternoon .choice-icon { color: var(--draft-blue); background: var(--draft-blue-soft); }
+.off .choice-icon { color: var(--draft-off); background: var(--draft-off-soft); }
+
+.choice-copy b,
+.choice-copy small {
+  display: block;
+}
+
+.choice-copy b {
+  color: #242529;
+  font-size: 15px;
+}
+
+.choice-copy small {
+  margin-top: 3px;
+  color: #7a7e85;
+  font-size: 11px;
+}
+
+.choice-check {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e9ebee;
+  color: transparent;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.schedule-choice-card:has(input:checked) {
+  border-color: var(--draft-brand);
+  background: #fffafb;
+  box-shadow: 0 0 0 3px rgba(123, 38, 54, .08);
+}
+
+.schedule-choice-card:has(input:checked) .choice-check {
+  color: #fff;
+  background: var(--draft-brand);
+}
+
+.schedule-choice-actions {
+  flex-wrap: wrap;
+}
+
+/* Trạng thái lịch */
+.personal-draft {
+  background: #eef5ff;
+  color: #2e6495;
+  border-color: #d8e8f7;
+}
+
+.personal-draft-off {
+  background: #f2f3f5;
+  color: #5e636a;
+  border-color: #e0e2e5;
+}
+
+.personal-off {
+  background: #eceef1;
+  color: #42464c;
+  border-color: #d7d9dd;
+}
+
+.calendar-cell.status-draft { background: #fbfdff; }
+.calendar-cell.status-draft-off { background: #fafafa; }
+.calendar-cell.status-off { background: #f6f6f7; }
+
+.calendar-cell.status-draft::after,
+.calendar-cell.status-draft-off::after,
+.calendar-cell.status-off::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px;
+}
+
+.calendar-cell.status-draft::after { background: var(--draft-blue); }
+.calendar-cell.status-draft-off::after { background: #9a9ea5; }
+.calendar-cell.status-off::after { background: #5f646b; }
+
+.draft-event { border-left: 3px solid var(--draft-blue); background: var(--draft-blue-soft); }
+.off-event,
+.liquid-event.off { border-left: 3px solid #6b7077; background: #f5f6f7; }
+
+/* Admin OFF */
+.admin-event.off {
+  border-color: #d9dce0;
+  background: #f4f5f6;
+}
+
+.admin-chip.off {
+  color: #545960;
+  background: #eef0f2;
+}
+
+/* Mobile */
+@media (max-width: 760px) {
+  .draft-review-head {
+    align-items: stretch;
+  }
+
+  .draft-review-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .draft-count-badge {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .draft-review-actions .btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .draft-review-item {
+    grid-template-columns: 54px minmax(0,1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .draft-date-box {
+    min-height: 52px;
+  }
+
+  .draft-item-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .draft-item-actions .btn {
+    width: 100%;
+  }
+
+  .schedule-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-choice-card {
+    min-height: 72px;
+  }
+
+  .calendar-cell.status-draft { background: var(--draft-blue-soft); color: var(--draft-blue); }
+  .calendar-cell.status-draft-off { background: #f0f1f3; color: #62666d; }
+  .calendar-cell.status-off { background: #e9ebee; color: #42464c; }
+
+  .calendar-cell.status-draft::after,
+  .calendar-cell.status-draft-off::after,
+  .calendar-cell.status-off::after {
+    left: 50%;
+    top: auto;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+  }
+
+  .admin-calendar-cell.has-off {
+    background: #f1f2f4;
+  }
+
+  .admin-calendar-cell.has-off::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #656a71;
+    transform: translateX(-50%);
+  }
+
+  .liquid-stat-grid {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+}
+
+@media (max-width: 380px) {
+  .draft-review-actions {
+    grid-template-columns: 1fr;
+  }
+  .draft-count-badge {
+    grid-column: auto;
+  }
+}
+.badge.off {
+  color: #4f545b;
+  background: #eceef1;
+  border: 1px solid #d9dce0;
+}
+.dot-draft { background: var(--draft-blue); }
+.dot-off { background: #62676e; }

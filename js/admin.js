@@ -33,6 +33,7 @@ const createAccountMessage = document.getElementById("createAccountMessage");
 const accountAdminPanel = document.getElementById("accountAdminPanel");
 const dangerZonePanel = document.getElementById("dangerZonePanel");
 const TIME_META_REGEX = /\[\[UWS_TIME:(\d{2}:\d{2})-(\d{2}:\d{2})\]\]\s*/;
+const OFF_SUBMITTED_MARKER = "[[UWS_OFF_SUBMITTED]]";
 const deleteScheduleModal = document.getElementById("deleteScheduleModal");
 const deleteConfirmPassword = document.getElementById("deleteConfirmPassword");
 const deleteScheduleMessage = document.getElementById("deleteScheduleMessage");
@@ -94,6 +95,7 @@ function parseScheduleNote(note) {
 }
 
 function requireShiftLabel(row) {
+  if (row.is_off || row.shift === "off") return "OFF";
   const meta = parseScheduleNote(row.note);
   return `${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? ` • ${meta.timeText}` : ""}`;
 }
@@ -374,24 +376,46 @@ async function loadMonthSummary() {
   const startIso = toISODate(getAdminMonthStart());
   const endIso = toISODate(getAdminMonthEnd());
 
-  const { data, error } = await supabase
-    .from("schedule_requests")
-    .select("id, work_date, shift, status, note, profiles:employee_id(full_name, employee_code, team, email)")
-    .gte("work_date", startIso)
-    .lte("work_date", endIso)
-    .in("status", ["pending", "approved"])
-    .order("work_date", { ascending: true })
-    .order("submitted_at", { ascending: true });
+  const [scheduleRes, offRes] = await Promise.all([
+    supabase
+      .from("schedule_requests")
+      .select("id, work_date, shift, status, note, submitted_at, profiles:employee_id(full_name, employee_code, team, email, role_type)")
+      .gte("work_date", startIso)
+      .lte("work_date", endIso)
+      .in("status", ["pending", "approved"])
+      .order("work_date", { ascending: true })
+      .order("submitted_at", { ascending: true }),
+    supabase
+      .from("unavailability")
+      .select("id, unavailable_date, shift, status, note, created_at, profiles:employee_id(full_name, employee_code, team, email, role_type)")
+      .gte("unavailable_date", startIso)
+      .lte("unavailable_date", endIso)
+      .eq("status", "active")
+      .order("unavailable_date", { ascending: true })
+  ]);
 
-  if (error) {
-    adminMonthSummary.innerHTML = `<div class="empty-row">${error.message}</div>`;
+  if (scheduleRes.error || offRes.error) {
+    adminMonthSummary.innerHTML = `<div class="empty-row">${scheduleRes.error?.message || offRes.error?.message || "Không tải được lịch tháng."}</div>`;
     return;
   }
 
   adminMonthTitle.textContent = `Tháng ${selectedAdminMonth.getMonth() + 1}/${selectedAdminMonth.getFullYear()}`;
 
+  const offRows = (offRes.data || [])
+    .filter(row => String(row.note || "").includes(OFF_SUBMITTED_MARKER))
+    .map(row => ({
+      ...row,
+      id: `off:${row.id}`,
+      work_date: row.unavailable_date,
+      shift: "off",
+      status: "off",
+      is_off: true,
+      note: String(row.note || "").replace(OFF_SUBMITTED_MARKER, "").trim()
+    }));
+
+  const rowsAll = [...(scheduleRes.data || []), ...offRows];
   const byDate = {};
-  (data || []).forEach(row => {
+  rowsAll.forEach(row => {
     const iso = String(row.work_date).slice(0, 10);
     byDate[iso] ||= [];
     byDate[iso].push(row);
@@ -404,11 +428,13 @@ async function loadMonthSummary() {
     const rows = byDate[iso] || [];
     const approved = rows.filter(row => row.status === "approved").length;
     const pending = rows.filter(row => row.status === "pending").length;
+    const offCount = rows.filter(row => row.status === "off").length;
     const isOtherMonth = !sameAdminMonth(date) ? "is-other-month" : "";
     const isTodayClass = isToday(date) ? "is-today" : "";
     const eventClass = rows.length ? "has-events" : "";
     const pendingClass = pending ? "has-pending" : "";
     const approvedClass = approved ? "has-approved" : "";
+    const offClass = offCount ? "has-off" : "";
 
     const eventsHtml = rows.length
       ? rows.map(row => `
@@ -420,7 +446,7 @@ async function loadMonthSummary() {
       : `<div class="admin-empty-cell">Trống</div>`;
 
     return `
-      <div class="calendar-cell admin-calendar-cell ${isOtherMonth} ${isTodayClass} ${eventClass} ${pendingClass} ${approvedClass}" data-date="${iso}">
+      <div class="calendar-cell admin-calendar-cell ${isOtherMonth} ${isTodayClass} ${eventClass} ${pendingClass} ${approvedClass} ${offClass}" data-date="${iso}">
         <div class="cell-top">
           <div>
             <div class="date-number">${date.getDate()}</div>
@@ -429,6 +455,7 @@ async function loadMonthSummary() {
           <div class="admin-day-stats">
             <span class="admin-chip ok">Duyệt ${approved}</span>
             <span class="admin-chip pending">Chờ ${pending}</span>
+            ${offCount ? `<span class="admin-chip off">OFF ${offCount}</span>` : ""}
           </div>
         </div>
         <div class="admin-events-wrap">${eventsHtml}</div>
@@ -746,7 +773,7 @@ async function confirmDeleteAllSchedules() {
   const notifications = (employees || []).map(employee => ({
     recipient_id: employee.id,
     title: "Lịch làm đã được reset",
-    message: "Admin đã xóa toàn bộ lịch làm trên hệ thống. Vui lòng đăng ký lại lịch làm mới nếu cần.",
+    message: "Admin đã xóa toàn bộ lịch làm và các ngày OFF đã nộp. Vui lòng tạo lại bản nháp và nộp lịch tháng mới.",
     type: "warn",
     created_by: currentUser.id,
     created_at: now
@@ -785,7 +812,33 @@ async function confirmDeleteAllSchedules() {
     return;
   }
 
-  showMessage(deleteScheduleMessage, `Đã xóa toàn bộ lịch làm và gửi thông báo cho ${notifications.length} tài khoản.`, "ok");
+  const { data: offRows, error: offLoadError } = await supabase
+    .from("unavailability")
+    .select("id, note")
+    .eq("status", "active");
+
+  if (offLoadError) {
+    showMessage(deleteScheduleMessage, `Lỗi tải danh sách OFF: ${offLoadError.message}`, "err");
+    return;
+  }
+
+  const offIds = (offRows || [])
+    .filter(row => String(row.note || "").includes(OFF_SUBMITTED_MARKER))
+    .map(row => row.id);
+
+  if (offIds.length) {
+    const { error: offDeleteError } = await supabase
+      .from("unavailability")
+      .delete()
+      .in("id", offIds);
+
+    if (offDeleteError) {
+      showMessage(deleteScheduleMessage, `Lỗi xóa các ngày OFF: ${offDeleteError.message}`, "err");
+      return;
+    }
+  }
+
+  showMessage(deleteScheduleMessage, `Đã xóa toàn bộ lịch làm, ${offIds.length} ngày OFF và gửi thông báo cho ${notifications.length} tài khoản.`, "ok");
 
   setTimeout(async () => {
     closeDeleteScheduleModal();
@@ -871,22 +924,24 @@ function openAdminDayDetailModal(dateIso) {
   const rows = adminMonthRowsByDate[dateIso] || [];
   const approved = rows.filter(row => row.status === "approved").length;
   const pending = rows.filter(row => row.status === "pending").length;
+  const offCount = rows.filter(row => row.status === "off").length;
 
   modal.querySelector("#adminDayDetailTitle").textContent = formatDate(dateIso);
   modal.querySelector("#adminDayDetailSub").textContent = rows.length
-    ? `${rows.length} lịch đăng ký trong ngày này.`
+    ? `${rows.length} lựa chọn lịch trong ngày này.`
     : "Ngày này chưa có lịch đăng ký.";
 
   const eventsHtml = rows.length
     ? rows.map(row => {
         const profile = row.profiles || {};
         const meta = parseScheduleNote(row.note);
+        const statusText = row.status === "off" ? "OFF đã chốt" : (STATUS_LABELS[row.status] || row.status);
         return `
           <div class="liquid-event ${row.status}">
             <strong>${displayProfileName(profile)}</strong>
             <small>${profile.role_type || ""}${profile.team ? ` • ${profile.team}` : ""}</small><br>
-            <small><span class="detail-label">Ca làm</span>${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? ` • ${meta.timeText}` : ""}</small><br>
-            <small><span class="detail-label">Trạng thái</span>${STATUS_LABELS[row.status] || row.status}</small>
+            <small><span class="detail-label">Lịch</span>${requireShiftLabel(row)}</small><br>
+            <small><span class="detail-label">Trạng thái</span>${statusText}</small>
             ${meta.cleanNote ? `<p class="liquid-muted">${meta.cleanNote}</p>` : ""}
           </div>
         `;
@@ -895,9 +950,10 @@ function openAdminDayDetailModal(dateIso) {
 
   modal.querySelector("#adminDayDetailBody").innerHTML = `
     <div class="liquid-stat-grid">
-      <div class="liquid-stat"><span>Tổng lịch</span><b>${rows.length}</b></div>
+      <div class="liquid-stat"><span>Tổng lựa chọn</span><b>${rows.length}</b></div>
       <div class="liquid-stat"><span>Đã duyệt</span><b>${approved}</b></div>
       <div class="liquid-stat"><span>Chờ duyệt</span><b>${pending}</b></div>
+      <div class="liquid-stat"><span>OFF</span><b>${offCount}</b></div>
     </div>
     <div class="liquid-event-list">${eventsHtml}</div>
   `;

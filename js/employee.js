@@ -24,9 +24,11 @@ let monthCounts = [];
 
 let activeRegisterDate = null;
 let remoteNotifications = [];
+let monthDraft = {};
 
 const DEFAULT_MAX_STAFF = 8;
 const TIME_META_REGEX = /\[\[UWS_TIME:(\d{2}:\d{2})-(\d{2}:\d{2})\]\]\s*/;
+const OFF_SUBMITTED_MARKER = "[[UWS_OFF_SUBMITTED]]";
 
 const welcomeName = document.getElementById("welcomeName");
 const profileLine = document.getElementById("profileLine");
@@ -49,15 +51,12 @@ const calendarMessage = document.getElementById("calendarMessage");
 const registerModal = document.getElementById("registerModal");
 const registerModalTitle = document.getElementById("registerModalTitle");
 const registerModalMeta = document.getElementById("registerModalMeta");
-const modalApprovedCount = document.getElementById("modalApprovedCount");
-const modalPendingCount = document.getElementById("modalPendingCount");
-const modalStaffStatus = document.getElementById("modalStaffStatus");
 const registerNote = document.getElementById("registerNote");
 const registerMessage = document.getElementById("registerMessage");
-const registerStartTime = document.getElementById("registerStartTime");
-const registerEndTime = document.getElementById("registerEndTime");
-const registerStartPreview = document.getElementById("registerStartPreview");
-const registerEndPreview = document.getElementById("registerEndPreview");
+const deleteDraftDayBtn = document.getElementById("deleteDraftDayBtn");
+const draftReviewCount = document.getElementById("draftReviewCount");
+const draftReviewList = document.getElementById("draftReviewList");
+const draftReviewMessage = document.getElementById("draftReviewMessage");
 
 const leaveModal = document.getElementById("leaveModal");
 const leaveModalTitle = document.getElementById("leaveModalTitle");
@@ -297,18 +296,56 @@ function isToday(date) {
          date.getFullYear() === now.getFullYear();
 }
 
-function formatHour(value) {
-  const n = Number(value);
-  return `${String(n).padStart(2, "0")}:00`;
+const DRAFT_SHIFT_LABELS = {
+  full_day: "Cả ngày",
+  morning: "Buổi sáng",
+  afternoon: "Buổi chiều",
+  off: "OFF"
+};
+
+function draftMonthKey() {
+  return `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function draftStorageKey() {
+  return `uws_month_schedule_draft_${currentUser?.id || "guest"}_${draftMonthKey()}`;
+}
+
+function readMonthDraft() {
+  try {
+    const value = JSON.parse(localStorage.getItem(draftStorageKey()) || "{}");
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistMonthDraft() {
+  localStorage.setItem(draftStorageKey(), JSON.stringify(monthDraft));
+}
+
+function getDraftForDate(dateIso) {
+  return monthDraft[dateIso] || null;
+}
+
+function getSelectedRegisterShift() {
+  const selected = document.querySelector('input[name="registerShift"]:checked');
+  return selected?.value || "";
+}
+
+function clearRegisterChoice() {
+  document.querySelectorAll('input[name="registerShift"]').forEach(input => {
+    input.checked = false;
+  });
 }
 
 function parseScheduleNote(note) {
   const raw = String(note || "");
   const match = raw.match(TIME_META_REGEX);
   if (!match) {
-    return { start: "", end: "", cleanNote: raw.trim(), timeText: "" };
+    return { start: "", end: "", cleanNote: raw.replace(OFF_SUBMITTED_MARKER, "").trim(), timeText: "" };
   }
-  const cleanNote = raw.replace(TIME_META_REGEX, "").trim();
+  const cleanNote = raw.replace(TIME_META_REGEX, "").replace(OFF_SUBMITTED_MARKER, "").trim();
   return {
     start: match[1],
     end: match[2],
@@ -317,52 +354,8 @@ function parseScheduleNote(note) {
   };
 }
 
-function buildScheduleNote(userNote, start, end) {
-  const meta = `[[UWS_TIME:${start}-${end}]]`;
-  return userNote ? `${meta} ${userNote}` : meta;
-}
-
-function getSelectedRegisterShift() {
-  const selected = document.querySelector('input[name="registerShift"]:checked');
-  return selected?.value || "morning";
-}
-
-function applyShiftPreset(shift) {
-  const presets = {
-    morning: [8, 12],
-    afternoon: [13, 18],
-    full_day: [9, 18]
-  };
-  const [start, end] = presets[shift] || presets.morning;
-  registerStartTime.value = String(start);
-  registerEndTime.value = String(end);
-  syncRegisterTimePreview();
-}
-
-function syncRegisterTimePreview() {
-  let start = Number(registerStartTime.value || 0);
-  let end = Number(registerEndTime.value || 0);
-
-  if (end <= start) {
-    end = Math.min(24, start + 1);
-    registerEndTime.value = String(end);
-  }
-
-  if (start >= end) {
-    start = Math.max(0, end - 1);
-    registerStartTime.value = String(start);
-  }
-
-  registerStartPreview.textContent = formatHour(start);
-  registerEndPreview.textContent = formatHour(end);
-}
-
-function getSelectedTimeRange() {
-  syncRegisterTimePreview();
-  return {
-    start: formatHour(registerStartTime.value),
-    end: formatHour(registerEndTime.value)
-  };
+function buildScheduleNote(userNote) {
+  return userNote || null;
 }
 
 function getCountForDate(dateIso) {
@@ -389,6 +382,14 @@ function getLeavesForDate(dateIso) {
 
 function getUnavailableForDate(dateIso) {
   return monthUnavailable.filter(row => normalizeDate(row.unavailable_date) === dateIso && row.status === "active");
+}
+
+function getSubmittedOffForDate(dateIso) {
+  return getUnavailableForDate(dateIso).filter(row => String(row.note || "").includes(OFF_SUBMITTED_MARKER));
+}
+
+function getRegularUnavailableForDate(dateIso) {
+  return getUnavailableForDate(dateIso).filter(row => !String(row.note || "").includes(OFF_SUBMITTED_MARKER));
 }
 
 function shiftText(rows) {
@@ -426,6 +427,21 @@ function getPersonalStatus(dateIso) {
     return { code: "pending", label: "Chờ duyệt", className: "personal-pending", detail: shiftText(pending) };
   }
 
+  const submittedOff = getSubmittedOffForDate(dateIso);
+  if (submittedOff.length) {
+    return { code: "off-submitted", label: "OFF", className: "personal-off", detail: "Đã chốt lịch" };
+  }
+
+  const draft = getDraftForDate(dateIso);
+  if (draft) {
+    return {
+      code: draft.shift === "off" ? "draft-off" : "draft",
+      label: "Bản nháp",
+      className: draft.shift === "off" ? "personal-draft-off" : "personal-draft",
+      detail: DRAFT_SHIFT_LABELS[draft.shift] || draft.shift
+    };
+  }
+
   if (rejected.length) {
     return { code: "rejected", label: "Từ chối", className: "personal-rejected", detail: "Có thể đăng ký lại" };
   }
@@ -445,7 +461,10 @@ function getCellStatusClass(dateIso) {
   if (personalStatus.code === "pending") return "status-pending";
   if (personalStatus.code === "leave") return "status-leave";
   if (personalStatus.code === "leave-pending") return "status-leave-pending";
-  if (unavailableRows.length) return "status-busy";
+  if (personalStatus.code === "off-submitted") return "status-off";
+  if (personalStatus.code === "draft-off") return "status-draft-off";
+  if (personalStatus.code === "draft") return "status-draft";
+  if (getRegularUnavailableForDate(dateIso).length) return "status-busy";
   return "status-none";
 }
 
@@ -477,7 +496,7 @@ function renderCalendar() {
     const counts = getCountForDate(iso);
     const staffStatus = getStaffStatus(counts.approved);
     const personalStatus = getPersonalStatus(iso);
-    const unavailableRows = getUnavailableForDate(iso);
+    const unavailableRows = getRegularUnavailableForDate(iso);
 
     const isOtherMonth = !sameMonth(date);
     const todayClass = isToday(date) ? "is-today" : "";
@@ -497,8 +516,11 @@ function renderCalendar() {
         actionHtml = `<button class="day-action disabled" type="button" disabled>Đang chờ duyệt</button>`;
       } else if (personalStatus.code === "leave" || personalStatus.code === "leave-pending") {
         actionHtml = `<button class="day-action disabled" type="button" disabled>Đã gửi nghỉ</button>`;
+      } else if (personalStatus.code === "off-submitted") {
+        actionHtml = `<button class="day-action disabled" type="button" disabled>Đã chốt OFF</button>`;
       } else {
-        actionHtml = `<button class="day-action register" data-action="register" data-date="${iso}" type="button">Đăng ký</button>`;
+        const label = personalStatus.code === "draft" || personalStatus.code === "draft-off" ? "Sửa lựa chọn" : "Chọn lịch";
+        actionHtml = `<button class="day-action register" data-action="register" data-date="${iso}" type="button">${label}</button>`;
       }
     }
 
@@ -530,7 +552,6 @@ function renderCalendar() {
     monthCalendar.appendChild(card);
   });
 }
-
 
 function isCompactCalendar() {
   return window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
@@ -583,14 +604,18 @@ function openEmployeeDayDetailModal(dateIso) {
   const personalStatus = getPersonalStatus(dateIso);
   const schedules = getSchedulesForDate(dateIso);
   const leaves = getLeavesForDate(dateIso);
-  const unavailableRows = getUnavailableForDate(dateIso);
+  const unavailableRows = getRegularUnavailableForDate(dateIso);
+  const submittedOff = getSubmittedOffForDate(dateIso);
+  const draft = getDraftForDate(dateIso);
 
   const title = modal.querySelector("#employeeDayDetailTitle");
   const sub = modal.querySelector("#employeeDayDetailSub");
   const body = modal.querySelector("#employeeDayDetailBody");
 
   title.textContent = formatDate(dateIso);
-  sub.textContent = "Chạm vào thao tác bên dưới để đăng ký hoặc xin nghỉ.";
+  sub.textContent = personalStatus.code === "approved"
+    ? "Lịch đã được duyệt. Muốn nghỉ cần gửi yêu cầu xin nghỉ."
+    : "Bạn có thể chọn và sửa lịch trước khi nộp bản nháp tháng.";
 
   const scheduleHtml = schedules.length
     ? schedules.map(row => {
@@ -603,7 +628,15 @@ function openEmployeeDayDetailModal(dateIso) {
           </div>
         `;
       }).join("")
-    : `<div class="liquid-event"><strong>Ngày trống</strong><small>Chưa có lịch đăng ký.</small></div>`;
+    : "";
+
+  const draftHtml = draft
+    ? `<div class="liquid-event draft-event"><strong>Bản nháp</strong><small>${DRAFT_SHIFT_LABELS[draft.shift] || draft.shift}</small>${draft.note ? `<p class="liquid-muted">${draft.note}</p>` : ""}</div>`
+    : "";
+
+  const offHtml = submittedOff.length
+    ? `<div class="liquid-event off-event"><strong>OFF đã chốt</strong><small>Ngày này đã được nộp là OFF.</small></div>`
+    : "";
 
   const leaveHtml = leaves.length
     ? leaves.map(row => `
@@ -625,6 +658,10 @@ function openEmployeeDayDetailModal(dateIso) {
       `).join("")
     : "";
 
+  const emptyHtml = !scheduleHtml && !draftHtml && !offHtml && !leaveHtml && !busyHtml
+    ? `<div class="liquid-event"><strong>Ngày trống</strong><small>Chưa có lựa chọn.</small></div>`
+    : "";
+
   let actionHtml = "";
   if (personalStatus.code === "approved") {
     actionHtml = `<button class="btn danger" data-action="leave" data-date="${dateIso}" type="button">Xin nghỉ ngày này</button>`;
@@ -632,8 +669,10 @@ function openEmployeeDayDetailModal(dateIso) {
     actionHtml = `<button class="btn ghost" type="button" disabled>Đang chờ duyệt</button>`;
   } else if (personalStatus.code === "leave" || personalStatus.code === "leave-pending") {
     actionHtml = `<button class="btn ghost" type="button" disabled>Đã gửi yêu cầu nghỉ</button>`;
+  } else if (personalStatus.code === "off-submitted") {
+    actionHtml = `<button class="btn ghost" type="button" disabled>Đã chốt OFF</button>`;
   } else {
-    actionHtml = `<button class="btn primary" data-action="register" data-date="${dateIso}" type="button">Đăng ký ngày này</button>`;
+    actionHtml = `<button class="btn primary" data-action="register" data-date="${dateIso}" type="button">${draft ? "Sửa lựa chọn" : "Chọn lịch ngày này"}</button>`;
   }
 
   body.innerHTML = `
@@ -643,9 +682,7 @@ function openEmployeeDayDetailModal(dateIso) {
       <div class="liquid-stat"><span>Trạng thái</span><b>${personalStatus.label || "Trống"}</b></div>
     </div>
     <div class="liquid-event-list">
-      ${scheduleHtml}
-      ${leaveHtml}
-      ${busyHtml}
+      ${draftHtml}${scheduleHtml}${offHtml}${leaveHtml}${busyHtml}${emptyHtml}
     </div>
     <div class="liquid-day-actions">${actionHtml}</div>
   `;
@@ -654,18 +691,35 @@ function openEmployeeDayDetailModal(dateIso) {
 }
 
 function renderMyScheduleTable() {
-  const rows = [...monthSchedules].sort((a, b) => {
-    const dateCompare = String(a.work_date).localeCompare(String(b.work_date));
+  const scheduleRows = monthSchedules.map(row => ({ ...row, row_type: "schedule", date_value: row.work_date }));
+  const offRows = monthUnavailable
+    .filter(row => row.status === "active" && String(row.note || "").includes(OFF_SUBMITTED_MARKER))
+    .map(row => ({ ...row, row_type: "off", date_value: row.unavailable_date }));
+
+  const rows = [...scheduleRows, ...offRows].sort((a, b) => {
+    const dateCompare = String(a.date_value).localeCompare(String(b.date_value));
     if (dateCompare !== 0) return dateCompare;
     return String(a.shift).localeCompare(String(b.shift));
   });
 
   if (!rows.length) {
-    myScheduleTable.innerHTML = `<tr><td colspan="4" class="empty-row">Chưa có lịch đăng ký trong tháng này.</td></tr>`;
+    myScheduleTable.innerHTML = `<tr><td colspan="4" class="empty-row">Chưa có lịch đã nộp trong tháng này.</td></tr>`;
     return;
   }
 
   myScheduleTable.innerHTML = rows.map(row => {
+    if (row.row_type === "off") {
+      const note = String(row.note || "").replace(OFF_SUBMITTED_MARKER, "").trim();
+      return `
+        <tr>
+          <td>${formatDate(row.date_value)}</td>
+          <td>OFF</td>
+          <td><span class="badge off">Đã chốt</span></td>
+          <td>${note || ""}</td>
+        </tr>
+      `;
+    }
+
     const noteMeta = parseScheduleNote(row.note);
     const shiftLabel = `${SHIFT_LABELS[row.shift] || row.shift}${noteMeta.timeText ? ` • ${noteMeta.timeText}` : ""}`;
     return `
@@ -682,22 +736,32 @@ function renderMyScheduleTable() {
 function clearRegisterModal() {
   registerNote.value = "";
   showMessage(registerMessage, "");
-  document.getElementById("regMorning").checked = true;
-  applyShiftPreset("morning");
+  clearRegisterChoice();
+  deleteDraftDayBtn?.classList.add("hidden");
 }
 
 function openRegisterModal(dateIso) {
   activeRegisterDate = dateIso;
   clearRegisterModal();
 
-  const counts = getCountForDate(dateIso);
-  const staffStatus = getStaffStatus(counts.approved);
+  const existingSchedule = getSchedulesForDate(dateIso).find(row => ["pending", "approved"].includes(row.status));
+  const submittedOff = getSubmittedOffForDate(dateIso);
 
-  registerModalTitle.textContent = `Đăng ký ngày ${formatDate(dateIso)}`;
-  registerModalMeta.textContent = `Số người đã duyệt hiện tại: ${counts.approved}/${DEFAULT_MAX_STAFF}`;
-  modalApprovedCount.textContent = counts.approved;
-  modalPendingCount.textContent = counts.pending;
-  modalStaffStatus.textContent = staffStatus.label;
+  if (existingSchedule || submittedOff.length) {
+    showToast("Ngày này đã được nộp và không thể sửa trực tiếp.", "warn");
+    return;
+  }
+
+  const draft = getDraftForDate(dateIso);
+  registerModalTitle.textContent = `${draft ? "Sửa" : "Chọn"} lịch ngày ${formatDate(dateIso)}`;
+  registerModalMeta.textContent = "Lựa chọn chỉ được lưu vào bản nháp. Bạn vẫn có thể sửa hoặc xóa trước khi nộp lịch tháng.";
+
+  if (draft) {
+    const input = document.querySelector(`input[name="registerShift"][value="${draft.shift}"]`);
+    if (input) input.checked = true;
+    registerNote.value = draft.note || "";
+    deleteDraftDayBtn?.classList.remove("hidden");
+  }
 
   registerModal.classList.remove("hidden");
 }
@@ -898,52 +962,164 @@ async function submitChangePassword() {
 }
 
 
-async function submitRegister() {
+function renderDraftReview() {
+  if (!draftReviewList || !draftReviewCount) return;
+  const entries = Object.entries(monthDraft).sort(([a], [b]) => a.localeCompare(b));
+  draftReviewCount.textContent = `${entries.length} ngày đã chọn`;
+  const submitButton = document.getElementById("submitMonthScheduleBtn");
+  const clearButton = document.getElementById("clearDraftBtn");
+  if (submitButton) submitButton.disabled = entries.length === 0;
+  if (clearButton) clearButton.disabled = entries.length === 0;
+
+  if (!entries.length) {
+    draftReviewList.innerHTML = `<div class="empty-row">Chưa chọn lịch cho ngày nào.</div>`;
+    return;
+  }
+
+  draftReviewList.innerHTML = entries.map(([dateIso, item]) => `
+    <article class="draft-review-item ${item.shift === "off" ? "is-off" : ""}">
+      <div class="draft-date-box">
+        <b>${new Date(`${dateIso}T00:00:00`).getDate()}</b>
+        <span>${formatDate(dateIso)}</span>
+      </div>
+      <div class="draft-item-copy">
+        <strong>${DRAFT_SHIFT_LABELS[item.shift] || item.shift}</strong>
+        <small>${item.note || "Không có ghi chú"}</small>
+      </div>
+      <div class="draft-item-actions">
+        <button class="btn ghost compact-btn" type="button" data-edit-draft="${dateIso}">Sửa</button>
+        <button class="btn danger-soft compact-btn" type="button" data-delete-draft="${dateIso}">Xóa</button>
+      </div>
+    </article>
+  `).join("");
+}
+
+function saveDraftDay() {
   if (!activeRegisterDate) return;
-
   const shift = getSelectedRegisterShift();
-  const { start, end } = getSelectedTimeRange();
 
-  const existing = getSchedulesForDate(activeRegisterDate)
-    .filter(row => ["pending", "approved"].includes(row.status));
-
-  if (existing.length) {
-    showMessage(registerMessage, "Ngày này bạn đã có lịch đăng ký hoặc đã được duyệt.", "err");
-    showToast("Ngày này đã có lịch đăng ký hoặc đã được duyệt.", "warn");
+  if (!shift) {
+    showMessage(registerMessage, "Vui lòng chọn Cả ngày, Buổi sáng, Buổi chiều hoặc OFF.", "err");
     return;
   }
 
-  const payload = {
-    employee_id: currentUser.id,
-    work_date: activeRegisterDate,
+  monthDraft[activeRegisterDate] = {
     shift,
-    status: "pending",
-    note: buildScheduleNote(registerNote.value.trim(), start, end)
+    note: registerNote.value.trim(),
+    updatedAt: new Date().toISOString()
   };
+  persistMonthDraft();
+  renderDraftReview();
+  renderCalendar();
 
-  showMessage(registerMessage, "Đang gửi đăng ký...");
+  showToast("Đã lưu vào bản nháp. Bạn có thể tiếp tục chọn các ngày khác.", "ok");
+  closeModals();
+}
 
-  const { error } = await supabase.from("schedule_requests").insert(payload);
+function deleteDraftDay(dateIso = activeRegisterDate) {
+  if (!dateIso || !monthDraft[dateIso]) return;
+  delete monthDraft[dateIso];
+  persistMonthDraft();
+  renderDraftReview();
+  renderCalendar();
+  showToast(`Đã xóa lựa chọn ngày ${formatDate(dateIso)}.`, "ok", 1800);
+  closeModals();
+}
 
-  if (error) {
-    showMessage(registerMessage, `Lỗi gửi lịch: ${error.message}`, "err");
-    showToast(`Lỗi gửi lịch: ${error.message}`, "err");
+function clearMonthDraft() {
+  const count = Object.keys(monthDraft).length;
+  if (!count) {
+    showToast("Bản nháp đang trống.", "warn");
     return;
   }
+  if (!window.confirm(`Xóa toàn bộ ${count} ngày đã chọn trong bản nháp tháng này?`)) return;
+  monthDraft = {};
+  persistMonthDraft();
+  renderDraftReview();
+  renderCalendar();
+  showMessage(draftReviewMessage, "Đã xóa toàn bộ bản nháp.", "ok");
+}
+
+async function submitMonthDraft() {
+  const entries = Object.entries(monthDraft).sort(([a], [b]) => a.localeCompare(b));
+  if (!entries.length) {
+    showMessage(draftReviewMessage, "Bạn chưa chọn lịch cho ngày nào.", "err");
+    showToast("Bản nháp đang trống.", "warn");
+    return;
+  }
+
+  const conflicts = entries.filter(([dateIso]) => {
+    const hasSchedule = getSchedulesForDate(dateIso).some(row => ["pending", "approved"].includes(row.status));
+    return hasSchedule || getSubmittedOffForDate(dateIso).length;
+  });
+
+  if (conflicts.length) {
+    showMessage(draftReviewMessage, `Có ${conflicts.length} ngày đã được nộp trước đó. Hãy tải lại trang và kiểm tra bản nháp.`, "err");
+    return;
+  }
+
+  if (!window.confirm(`Nộp ${entries.length} ngày đã chọn lên admin? Sau khi nộp, lịch làm không thể sửa trực tiếp; muốn nghỉ phải gửi yêu cầu xin nghỉ.`)) return;
+
+  const workRows = entries
+    .filter(([, item]) => item.shift !== "off")
+    .map(([dateIso, item]) => ({
+      employee_id: currentUser.id,
+      work_date: dateIso,
+      shift: item.shift,
+      status: "pending",
+      note: buildScheduleNote(item.note)
+    }));
+
+  const offRows = entries
+    .filter(([, item]) => item.shift === "off")
+    .map(([dateIso, item]) => ({
+      employee_id: currentUser.id,
+      unavailable_date: dateIso,
+      shift: "full_day",
+      reason_type: "personal",
+      note: `${OFF_SUBMITTED_MARKER}${item.note ? ` ${item.note}` : ""}`,
+      status: "active"
+    }));
+
+  showMessage(draftReviewMessage, "Đang nộp lịch tháng...");
+  const insertedScheduleIds = [];
+
+  if (workRows.length) {
+    const scheduleRes = await supabase.from("schedule_requests").insert(workRows);
+    if (scheduleRes.error) {
+      showMessage(draftReviewMessage, `Không nộp được lịch làm: ${scheduleRes.error.message}`, "err");
+      showToast("Nộp lịch không thành công.", "err");
+      return;
+    }
+    (scheduleRes.data || []).forEach(row => row?.id && insertedScheduleIds.push(row.id));
+  }
+
+  if (offRows.length) {
+    const offRes = await supabase.from("unavailability").insert(offRows);
+    if (offRes.error) {
+      if (insertedScheduleIds.length) {
+        await supabase.from("schedule_requests").delete().in("id", insertedScheduleIds);
+      }
+      showMessage(draftReviewMessage, `Không nộp được ngày OFF: ${offRes.error.message}. Các lịch vừa tạo đã được hoàn tác.`, "err");
+      showToast("Nộp lịch không thành công.", "err");
+      return;
+    }
+  }
+
+  const workCount = workRows.length;
+  const offCount = offRows.length;
+  monthDraft = {};
+  persistMonthDraft();
 
   addNotification({
-    title: "Đã gửi đăng ký lịch",
-    message: `${formatDate(activeRegisterDate)} • ${SHIFT_LABELS[shift]} • ${start} - ${end}. Yêu cầu đang chờ duyệt.`,
+    title: "Đã nộp lịch tháng",
+    message: `Đã gửi ${workCount} ngày làm và ${offCount} ngày OFF lên hệ thống.`,
     type: "ok"
   });
 
-  showMessage(registerMessage, "Đã gửi đăng ký lịch. Vui lòng chờ admin duyệt.", "ok");
-  showToast("Đã gửi đăng ký lịch. Vui lòng chờ admin duyệt.", "ok");
-
-  setTimeout(async () => {
-    closeModals();
-    await loadMonthData();
-  }, 500);
+  showMessage(draftReviewMessage, "Đã nộp lịch tháng thành công. Các ngày làm đang chờ admin duyệt.", "ok");
+  showToast("Đã nộp lịch tháng thành công.", "ok");
+  await loadMonthData();
 }
 
 async function submitLeave() {
@@ -1116,11 +1292,13 @@ async function loadMonthData() {
   monthSchedules = schedulesRes.data || [];
   monthLeaves = leavesRes.data || [];
   monthUnavailable = unavailableRes.data || [];
+  monthDraft = readMonthDraft();
 
   await loadRemoteNotifications();
   syncStatusNotifications();
   renderMonthStats();
   renderCalendar();
+  renderDraftReview();
   renderMyScheduleTable();
   renderNotifications();
   updateNotificationBadge();
@@ -1216,7 +1394,16 @@ function bindEvents() {
     }
   });
 
-  document.getElementById("submitRegisterBtn")?.addEventListener("click", submitRegister);
+  document.getElementById("saveDraftDayBtn")?.addEventListener("click", saveDraftDay);
+  document.getElementById("deleteDraftDayBtn")?.addEventListener("click", () => deleteDraftDay());
+  document.getElementById("submitMonthScheduleBtn")?.addEventListener("click", submitMonthDraft);
+  document.getElementById("clearDraftBtn")?.addEventListener("click", clearMonthDraft);
+  draftReviewList?.addEventListener("click", event => {
+    const editBtn = event.target.closest("[data-edit-draft]");
+    const deleteBtn = event.target.closest("[data-delete-draft]");
+    if (editBtn) openRegisterModal(editBtn.dataset.editDraft);
+    if (deleteBtn) deleteDraftDay(deleteBtn.dataset.deleteDraft);
+  });
   document.getElementById("submitLeaveBtn")?.addEventListener("click", submitLeave);
   document.getElementById("saveUnavailableBtn")?.addEventListener("click", saveUnavailable);
   document.getElementById("refreshMineBtn")?.addEventListener("click", async () => {
@@ -1247,12 +1434,6 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll('input[name="registerShift"]').forEach(input => {
-    input.addEventListener("change", () => applyShiftPreset(input.value));
-  });
-
-  registerStartTime?.addEventListener("input", syncRegisterTimePreview);
-  registerEndTime?.addEventListener("input", syncRegisterTimePreview);
 }
 
 (async function init() {
@@ -1263,7 +1444,6 @@ function bindEvents() {
   renderNotifications();
   updateNotificationBadge();
   document.getElementById("unavailableDate").value = toISODate(new Date());
-  syncRegisterTimePreview();
   await loadMonthData();
   showToast("Đã tải lịch tháng.", "ok", 1600);
 })();

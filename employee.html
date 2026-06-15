@@ -4,9 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Unite Work Schedule | Nhân sự</title>
-  <link rel="stylesheet" href="./css/style.css" />
-  <link rel="stylesheet" href="./css/v13-enterprise-responsive.css" />
-  <link rel="stylesheet" href="./css/v14-responsive-hotfix.css" />
+  <link rel="stylesheet" href="./css/style.css?v=15" />
+  <link rel="stylesheet" href="./css/v13-enterprise-responsive.css?v=15" />
+  <link rel="stylesheet" href="./css/v14-responsive-hotfix.css?v=15" />
+  <link rel="stylesheet" href="./css/v15-monthly-draft.css?v=15" />
 </head>
 <body>
   <header class="topbar">
@@ -69,7 +70,7 @@
         <div>
           <p class="eyebrow">Lịch làm tháng</p>
           <h2 id="monthTitle">Tháng</h2>
-          <p class="muted">Bấm vào một ô ngày để hiện thao tác. Ngày chờ duyệt màu đỏ, ngày đã duyệt màu xanh.</p>
+          <p class="muted">Chọn lịch cho từng ngày, xem lại toàn bộ bản nháp rồi mới nộp lên admin.</p>
         </div>
 
         <div class="month-actions">
@@ -83,6 +84,8 @@
         <span><i class="dot dot-pending"></i> Chờ duyệt</span>
         <span><i class="dot dot-approved"></i> Đã duyệt</span>
         <span><i class="dot dot-leave"></i> Xin nghỉ</span>
+        <span><i class="dot dot-draft"></i> Bản nháp</span>
+        <span><i class="dot dot-off"></i> OFF đã chốt</span>
         <span><i class="dot dot-busy"></i> Lịch học/bận</span>
       </div>
 
@@ -100,6 +103,26 @@
       </div>
 
       <p id="calendarMessage" class="message"></p>
+    </section>
+
+    <section id="draftReviewPanel" class="panel draft-review-panel">
+      <div class="section-head draft-review-head">
+        <div>
+          <p class="eyebrow">Bản nháp lịch tháng</p>
+          <h2>Xem lại trước khi nộp</h2>
+          <p class="muted">Bạn có thể sửa hoặc xóa từng ngày thoải mái. Chỉ khi bấm <b>Nộp lịch tháng</b> thì lịch mới được gửi lên admin.</p>
+        </div>
+        <div class="draft-review-actions">
+          <span id="draftReviewCount" class="draft-count-badge">0 ngày đã chọn</span>
+          <button id="clearDraftBtn" class="btn ghost" type="button">Xóa bản nháp</button>
+          <button id="submitMonthScheduleBtn" class="btn primary" type="button">Nộp lịch tháng</button>
+        </div>
+      </div>
+
+      <div id="draftReviewList" class="draft-review-list">
+        <div class="empty-row">Chưa chọn lịch cho ngày nào.</div>
+      </div>
+      <p id="draftReviewMessage" class="message"></p>
     </section>
 
     <section class="panel">
@@ -173,11 +196,11 @@
         <div class="guide-grid">
           <div>
             <h3>Đăng ký lịch</h3>
-            <p>Bấm vào ô ngày để hiện nút <b>Đăng ký</b>, chọn ca và gửi đăng ký.</p>
+            <p>Bấm vào ngày, chọn <b>Cả ngày / Buổi sáng / Buổi chiều / OFF</b>. Lịch chỉ được gửi khi bạn bấm <b>Nộp lịch tháng</b>.</p>
           </div>
           <div>
             <h3>Xin nghỉ</h3>
-            <p>Ngày đã được duyệt sẽ có màu xanh. Bấm vào ô ngày đó để hiện nút <b>Xin nghỉ</b>.</p>
+            <p>Trước khi nộp bạn được sửa hoặc xóa tự do. Sau khi lịch đã được nộp và duyệt, muốn nghỉ mới cần gửi yêu cầu xin nghỉ.</p>
           </div>
           <div>
             <h3>Lịch học / lịch bận</h3>
@@ -190,73 +213,52 @@
 
   <div id="registerModal" class="uws-modal hidden">
     <div class="uws-modal-backdrop" data-close-modal></div>
-    <div class="uws-modal-card">
+    <div class="uws-modal-card schedule-choice-modal">
       <div class="modal-head">
         <div>
-          <p class="eyebrow">Đăng ký lịch làm</p>
-          <h2 id="registerModalTitle">Đăng ký ngày</h2>
-          <p id="registerModalMeta" class="muted"></p>
+          <p class="eyebrow">Chọn lịch bản nháp</p>
+          <h2 id="registerModalTitle">Chọn lịch ngày</h2>
+          <p id="registerModalMeta" class="muted">Lựa chọn này chưa gửi lên admin cho đến khi bạn nộp lịch tháng.</p>
         </div>
         <button class="modal-close" type="button" data-close-modal>×</button>
       </div>
 
-      <div class="modal-info-grid">
-        <div><span>Đã duyệt</span><b id="modalApprovedCount">0</b></div>
-        <div><span>Chờ duyệt</span><b id="modalPendingCount">0</b></div>
-        <div><span>Tình trạng</span><b id="modalStaffStatus">Đang mở</b></div>
-      </div>
-
-      <div class="register-builder">
-        <div class="register-builder-head">
-          <div>
-            <h3>Chọn buổi làm</h3>
-            <p class="muted">Chọn buổi trước, sau đó tinh chỉnh giờ vào và giờ ra.</p>
-          </div>
-        </div>
-
-        <div class="shift-picker radio">
-          <label><input id="regMorning" name="registerShift" type="radio" value="morning" checked /> <span>Ca sáng</span></label>
-          <label><input id="regAfternoon" name="registerShift" type="radio" value="afternoon" /> <span>Ca chiều</span></label>
-          <label><input id="regFullDay" name="registerShift" type="radio" value="full_day" /> <span>Cả ngày</span></label>
-        </div>
-
-        <div class="time-range-card">
-          <div class="time-range-head">
-            <div>
-              <span class="eyebrow">Khung giờ 24h</span>
-              <h3>Chọn giờ làm</h3>
-            </div>
-            <div class="time-range-summary">
-              <div><small>Giờ vào</small><b id="registerStartPreview">09:00</b></div>
-              <div><small>Giờ ra</small><b id="registerEndPreview">18:00</b></div>
-            </div>
-          </div>
-
-          <div class="range-grid">
-            <label class="range-field">
-              <span>Giờ vào</span>
-              <input id="registerStartTime" type="range" min="0" max="23" step="1" value="9" />
-            </label>
-            <label class="range-field">
-              <span>Giờ ra</span>
-              <input id="registerEndTime" type="range" min="1" max="24" step="1" value="18" />
-            </label>
-          </div>
-
-          <div class="range-ticks">
-            <span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span>
-          </div>
-        </div>
+      <div class="schedule-choice-grid" role="radiogroup" aria-label="Chọn lịch làm">
+        <label class="schedule-choice-card full-day">
+          <input id="regFullDay" name="registerShift" type="radio" value="full_day" />
+          <span class="choice-icon">●</span>
+          <span class="choice-copy"><b>Cả ngày</b><small>Làm việc cả ngày</small></span>
+          <span class="choice-check">✓</span>
+        </label>
+        <label class="schedule-choice-card morning">
+          <input id="regMorning" name="registerShift" type="radio" value="morning" />
+          <span class="choice-icon">◐</span>
+          <span class="choice-copy"><b>Buổi sáng</b><small>Đăng ký ca sáng</small></span>
+          <span class="choice-check">✓</span>
+        </label>
+        <label class="schedule-choice-card afternoon">
+          <input id="regAfternoon" name="registerShift" type="radio" value="afternoon" />
+          <span class="choice-icon">◑</span>
+          <span class="choice-copy"><b>Buổi chiều</b><small>Đăng ký ca chiều</small></span>
+          <span class="choice-check">✓</span>
+        </label>
+        <label class="schedule-choice-card off">
+          <input id="regOff" name="registerShift" type="radio" value="off" />
+          <span class="choice-icon">○</span>
+          <span class="choice-copy"><b>OFF</b><small>Không làm ngày này</small></span>
+          <span class="choice-check">✓</span>
+        </label>
       </div>
 
       <label class="full">
-        Ghi chú cho admin nếu có
-        <textarea id="registerNote" rows="3" placeholder="Ví dụ: Em có thể hỗ trợ thêm nếu thiếu người..."></textarea>
+        Ghi chú nếu có
+        <textarea id="registerNote" rows="3" placeholder="Ví dụ: Có thể đổi ca khi cần..."></textarea>
       </label>
 
-      <div class="actions modal-actions">
-        <button id="submitRegisterBtn" class="btn primary" type="button">Gửi đăng ký</button>
-        <button class="btn ghost" type="button" data-close-modal>Hủy</button>
+      <div class="actions modal-actions schedule-choice-actions">
+        <button id="saveDraftDayBtn" class="btn primary" type="button">Lưu vào bản nháp</button>
+        <button id="deleteDraftDayBtn" class="btn danger-soft hidden" type="button">Xóa lựa chọn ngày này</button>
+        <button class="btn ghost" type="button" data-close-modal>Đóng</button>
       </div>
 
       <p id="registerMessage" class="message"></p>
@@ -400,7 +402,7 @@
     </div>
   </div>
 
-  <script src="./js/config.js"></script>
-  <script src="./js/employee.js"></script>
+  <script src="./js/config.js?v=15"></script>
+  <script src="./js/employee.js?v=15"></script>
 </body>
 </html>
