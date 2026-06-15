@@ -518,7 +518,7 @@ function renderCalendar() {
           <div class="date-number">${date.getDate()}</div>
           <div class="date-small">${formatDate(iso)}</div>
         </div>
-        <div class="people-count" title="Số người đã duyệt">👥 ${counts.approved}/${DEFAULT_MAX_STAFF}</div>
+        <div class="people-count" title="Số người đã duyệt">${counts.approved}/${DEFAULT_MAX_STAFF}</div>
       </div>
 
       <div class="staff-status ${staffStatus.className}">${staffStatus.label}</div>
@@ -529,6 +529,128 @@ function renderCalendar() {
 
     monthCalendar.appendChild(card);
   });
+}
+
+
+function isCompactCalendar() {
+  return window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+}
+
+function ensureEmployeeDayDetailModal() {
+  let modal = document.getElementById("employeeDayDetailModal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "employeeDayDetailModal";
+  modal.className = "liquid-day-modal hidden";
+  modal.innerHTML = `
+    <div class="liquid-day-backdrop" data-close-day-detail></div>
+    <div class="liquid-day-card">
+      <div class="liquid-day-head">
+        <div>
+          <p class="eyebrow">Chi tiết ngày</p>
+          <h2 id="employeeDayDetailTitle">Ngày</h2>
+          <p id="employeeDayDetailSub" class="muted"></p>
+        </div>
+        <button class="liquid-close" type="button" data-close-day-detail>×</button>
+      </div>
+      <div id="employeeDayDetailBody"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.querySelectorAll("[data-close-day-detail]").forEach(el => {
+    el.addEventListener("click", closeEmployeeDayDetailModal);
+  });
+  modal.addEventListener("click", event => {
+    const actionButton = event.target.closest("button[data-action]");
+    if (!actionButton) return;
+    const action = actionButton.dataset.action;
+    const date = actionButton.dataset.date;
+    closeEmployeeDayDetailModal();
+    if (action === "register") openRegisterModal(date);
+    if (action === "leave") openLeaveModal(date);
+  });
+  return modal;
+}
+
+function closeEmployeeDayDetailModal() {
+  document.getElementById("employeeDayDetailModal")?.classList.add("hidden");
+}
+
+function openEmployeeDayDetailModal(dateIso) {
+  const modal = ensureEmployeeDayDetailModal();
+  const counts = getCountForDate(dateIso);
+  const personalStatus = getPersonalStatus(dateIso);
+  const schedules = getSchedulesForDate(dateIso);
+  const leaves = getLeavesForDate(dateIso);
+  const unavailableRows = getUnavailableForDate(dateIso);
+
+  const title = modal.querySelector("#employeeDayDetailTitle");
+  const sub = modal.querySelector("#employeeDayDetailSub");
+  const body = modal.querySelector("#employeeDayDetailBody");
+
+  title.textContent = formatDate(dateIso);
+  sub.textContent = "Chạm vào thao tác bên dưới để đăng ký hoặc xin nghỉ.";
+
+  const scheduleHtml = schedules.length
+    ? schedules.map(row => {
+        const meta = parseScheduleNote(row.note);
+        return `
+          <div class="liquid-event">
+            <strong>${STATUS_LABELS[row.status] || row.status}</strong>
+            <small>${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? ` • ${meta.timeText}` : ""}</small>
+            ${meta.cleanNote ? `<p class="liquid-muted">${meta.cleanNote}</p>` : ""}
+          </div>
+        `;
+      }).join("")
+    : `<div class="liquid-event"><strong>Ngày trống</strong><small>Chưa có lịch đăng ký.</small></div>`;
+
+  const leaveHtml = leaves.length
+    ? leaves.map(row => `
+        <div class="liquid-event">
+          <strong>Xin nghỉ: ${STATUS_LABELS[row.status] || row.status}</strong>
+          <small>${SHIFT_LABELS[row.shift] || row.shift}</small>
+          ${row.reason_note ? `<p class="liquid-muted">${row.reason_note}</p>` : ""}
+        </div>
+      `).join("")
+    : "";
+
+  const busyHtml = unavailableRows.length
+    ? unavailableRows.map(row => `
+        <div class="liquid-event">
+          <strong>Lịch bận</strong>
+          <small>${SHIFT_LABELS[row.shift] || row.shift}</small>
+          ${row.note ? `<p class="liquid-muted">${row.note}</p>` : ""}
+        </div>
+      `).join("")
+    : "";
+
+  let actionHtml = "";
+  if (personalStatus.code === "approved") {
+    actionHtml = `<button class="btn danger" data-action="leave" data-date="${dateIso}" type="button">Xin nghỉ ngày này</button>`;
+  } else if (personalStatus.code === "pending") {
+    actionHtml = `<button class="btn ghost" type="button" disabled>Đang chờ duyệt</button>`;
+  } else if (personalStatus.code === "leave" || personalStatus.code === "leave-pending") {
+    actionHtml = `<button class="btn ghost" type="button" disabled>Đã gửi yêu cầu nghỉ</button>`;
+  } else {
+    actionHtml = `<button class="btn primary" data-action="register" data-date="${dateIso}" type="button">Đăng ký ngày này</button>`;
+  }
+
+  body.innerHTML = `
+    <div class="liquid-stat-grid">
+      <div class="liquid-stat"><span>Đã duyệt</span><b>${counts.approved}</b></div>
+      <div class="liquid-stat"><span>Chờ duyệt</span><b>${counts.pending}</b></div>
+      <div class="liquid-stat"><span>Trạng thái</span><b>${personalStatus.label || "Trống"}</b></div>
+    </div>
+    <div class="liquid-event-list">
+      ${scheduleHtml}
+      ${leaveHtml}
+      ${busyHtml}
+    </div>
+    <div class="liquid-day-actions">${actionHtml}</div>
+  `;
+
+  modal.classList.remove("hidden");
 }
 
 function renderMyScheduleTable() {
@@ -688,6 +810,7 @@ function closeModals() {
   notificationModal?.classList.add("hidden");
   profileModal?.classList.add("hidden");
   changePasswordModal?.classList.add("hidden");
+  closeEmployeeDayDetailModal();
   activeRegisterDate = null;
 }
 
@@ -1070,6 +1193,11 @@ function bindEvents() {
 
     const cell = event.target.closest(".calendar-cell");
     if (!cell || cell.classList.contains("is-other-month")) return;
+
+    if (isCompactCalendar()) {
+      openEmployeeDayDetailModal(cell.dataset.date);
+      return;
+    }
 
     document.querySelectorAll(".calendar-cell.is-open").forEach(item => {
       if (item !== cell) item.classList.remove("is-open");

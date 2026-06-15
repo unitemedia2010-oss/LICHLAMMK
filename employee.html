@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Unite Work Schedule | Nhân sự</title>
   <link rel="stylesheet" href="./css/style.css" />
-  <link rel="stylesheet" href="./css/employee-calendar-fix.css" />
+  <link rel="stylesheet" href="./css/v13-enterprise-responsive.css" />
+  <link rel="stylesheet" href="./css/v14-responsive-hotfix.css" />
 </head>
 <body>
   <header class="topbar">
@@ -15,15 +16,15 @@
     </div>
     <div class="topbar-actions">
       <button id="notificationBtn" class="btn ghost icon-btn" type="button" aria-label="Thông báo">
-        <span class="icon-bell">🔔</span>
+        <span class="button-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6v-5a7 7 0 0 0-5-6.71V3a2 2 0 0 0-4 0v1.29A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg></span>
         <span>Thông báo</span>
         <b id="notificationBadge" class="notif-badge hidden">0</b>
       </button>
 
       <div class="account-menu-wrap">
         <button id="accountMenuBtn" class="btn ghost account-menu-btn" type="button" aria-expanded="false">
-          <span>👤</span>
-          <span>Tài khoản</span>
+          <span class="button-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.42 0-8 2.24-8 5v2h16v-2c0-2.76-3.58-5-8-5Z"/></svg></span>
+          <span class="account-label">Tài khoản</span>
           <span class="chevron">▾</span>
         </button>
         <div id="accountMenu" class="account-menu hidden">
@@ -57,10 +58,10 @@
     </section>
 
     <section class="grid four">
-      <div class="panel metric compact"><span>Đã duyệt</span><b id="approvedDays">0</b></div>
-      <div class="panel metric compact"><span>Chờ duyệt</span><b id="pendingDays">0</b></div>
-      <div class="panel metric compact"><span>Đã xin nghỉ</span><b id="leaveDays">0</b></div>
-      <div class="panel metric compact"><span>Chỉ tiêu tháng</span><b id="targetDays">0</b></div>
+<div class="panel metric compact"><div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-8.4 13.4-4-4L8 11l2.6 2.6L16 8.2l1.4 1.4Z"/></svg></div><div class="metric-copy"><span>Đã duyệt</span><b id="approvedDays">0</b></div></div>
+      <div class="panel metric compact"><div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm1 10.414 3.293 3.293-1.414 1.414L11 13.242V7h2Z"/></svg></div><div class="metric-copy"><span>Chờ duyệt</span><b id="pendingDays">0</b></div></div>
+      <div class="panel metric compact"><div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3h-1V1h-2v2H8V1H6v2H5a3 3 0 0 0-3 3v13a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3Zm1 16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9h16Zm-3.293-5.293-4.5 4.5a1 1 0 0 1-1.414 0l-2.5-2.5 1.414-1.414 1.793 1.793 3.793-3.793Z"/></svg></div><div class="metric-copy"><span>Đã xin nghỉ</span><b id="leaveDays">0</b></div></div>
+      <div class="panel metric compact"><div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm0 16a6 6 0 1 1 6-6 6.007 6.007 0 0 1-6 6Zm0-4a2 2 0 1 1 2-2 2 2 0 0 1-2 2Z"/></svg></div><div class="metric-copy"><span>Chỉ tiêu tháng</span><b id="targetDays">0</b></div></div>
     </section>
 
     <section class="panel">
@@ -87,12 +88,12 @@
 
       <div class="calendar-shell">
         <div class="calendar-weekheads">
-          <div>Thứ 2</div>
-          <div>Thứ 3</div>
-          <div>Thứ 4</div>
-          <div>Thứ 5</div>
-          <div>Thứ 6</div>
-          <div>Thứ 7</div>
+          <div>T2</div>
+          <div>T3</div>
+          <div>T4</div>
+          <div>T5</div>
+          <div>T6</div>
+          <div>T7</div>
           <div>CN</div>
         </div>
         <div id="monthCalendar" class="month-calendar"></div>

@@ -26,6 +26,7 @@ let allSchedules = [];
 const weekStartInput = document.getElementById("adminWeekStart");
 const adminMonthTitle = document.getElementById("adminMonthTitle");
 const adminMonthSummary = document.getElementById("adminMonthSummary");
+let adminMonthRowsByDate = {};
 const profileSettingsTable = document.getElementById("profileSettingsTable");
 const profileSettingsMessage = document.getElementById("profileSettingsMessage");
 const createAccountMessage = document.getElementById("createAccountMessage");
@@ -395,6 +396,7 @@ async function loadMonthSummary() {
     byDate[iso] ||= [];
     byDate[iso].push(row);
   });
+  adminMonthRowsByDate = byDate;
 
   const dates = getAdminGridDates();
   adminMonthSummary.innerHTML = dates.map(date => {
@@ -404,6 +406,9 @@ async function loadMonthSummary() {
     const pending = rows.filter(row => row.status === "pending").length;
     const isOtherMonth = !sameAdminMonth(date) ? "is-other-month" : "";
     const isTodayClass = isToday(date) ? "is-today" : "";
+    const eventClass = rows.length ? "has-events" : "";
+    const pendingClass = pending ? "has-pending" : "";
+    const approvedClass = approved ? "has-approved" : "";
 
     const eventsHtml = rows.length
       ? rows.map(row => `
@@ -415,7 +420,7 @@ async function loadMonthSummary() {
       : `<div class="admin-empty-cell">Trống</div>`;
 
     return `
-      <div class="calendar-cell admin-calendar-cell ${isOtherMonth} ${isTodayClass}">
+      <div class="calendar-cell admin-calendar-cell ${isOtherMonth} ${isTodayClass} ${eventClass} ${pendingClass} ${approvedClass}" data-date="${iso}">
         <div class="cell-top">
           <div>
             <div class="date-number">${date.getDate()}</div>
@@ -824,6 +829,82 @@ async function logout() {
   window.location.href = "./index.html";
 }
 
+
+function isCompactAdminCalendar() {
+  return window.matchMedia && window.matchMedia("(max-width: 760px)").matches;
+}
+
+function ensureAdminDayDetailModal() {
+  let modal = document.getElementById("adminDayDetailModal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "adminDayDetailModal";
+  modal.className = "liquid-day-modal hidden";
+  modal.innerHTML = `
+    <div class="liquid-day-backdrop" data-close-admin-day-detail></div>
+    <div class="liquid-day-card">
+      <div class="liquid-day-head">
+        <div>
+          <p class="eyebrow">Chi tiết lịch làm</p>
+          <h2 id="adminDayDetailTitle">Ngày</h2>
+          <p id="adminDayDetailSub" class="muted"></p>
+        </div>
+        <button class="liquid-close" type="button" data-close-admin-day-detail>×</button>
+      </div>
+      <div id="adminDayDetailBody"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.querySelectorAll("[data-close-admin-day-detail]").forEach(el => {
+    el.addEventListener("click", closeAdminDayDetailModal);
+  });
+  return modal;
+}
+
+function closeAdminDayDetailModal() {
+  document.getElementById("adminDayDetailModal")?.classList.add("hidden");
+}
+
+function openAdminDayDetailModal(dateIso) {
+  const modal = ensureAdminDayDetailModal();
+  const rows = adminMonthRowsByDate[dateIso] || [];
+  const approved = rows.filter(row => row.status === "approved").length;
+  const pending = rows.filter(row => row.status === "pending").length;
+
+  modal.querySelector("#adminDayDetailTitle").textContent = formatDate(dateIso);
+  modal.querySelector("#adminDayDetailSub").textContent = rows.length
+    ? `${rows.length} lịch đăng ký trong ngày này.`
+    : "Ngày này chưa có lịch đăng ký.";
+
+  const eventsHtml = rows.length
+    ? rows.map(row => {
+        const profile = row.profiles || {};
+        const meta = parseScheduleNote(row.note);
+        return `
+          <div class="liquid-event ${row.status}">
+            <strong>${displayProfileName(profile)}</strong>
+            <small>${profile.role_type || ""}${profile.team ? ` • ${profile.team}` : ""}</small><br>
+            <small><span class="detail-label">Ca làm</span>${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? ` • ${meta.timeText}` : ""}</small><br>
+            <small><span class="detail-label">Trạng thái</span>${STATUS_LABELS[row.status] || row.status}</small>
+            ${meta.cleanNote ? `<p class="liquid-muted">${meta.cleanNote}</p>` : ""}
+          </div>
+        `;
+      }).join("")
+    : `<div class="liquid-event"><strong>Trống</strong><small>Chưa có nhân sự đăng ký.</small></div>`;
+
+  modal.querySelector("#adminDayDetailBody").innerHTML = `
+    <div class="liquid-stat-grid">
+      <div class="liquid-stat"><span>Tổng lịch</span><b>${rows.length}</b></div>
+      <div class="liquid-stat"><span>Đã duyệt</span><b>${approved}</b></div>
+      <div class="liquid-stat"><span>Chờ duyệt</span><b>${pending}</b></div>
+    </div>
+    <div class="liquid-event-list">${eventsHtml}</div>
+  `;
+
+  modal.classList.remove("hidden");
+}
+
 async function refreshAll() {
   await loadMetrics();
   await loadProfileSettings();
@@ -893,12 +974,33 @@ document.addEventListener("keydown", event => {
   if (event.key === "Escape") {
     closeDeleteScheduleModal();
     closeChangePasswordModal();
+    closeAdminDayDetailModal();
   }
 });
 
 document.getElementById("checkAllLeave")?.addEventListener("change", e => {
   document.querySelectorAll(".leave-check").forEach(cb => cb.checked = e.target.checked);
 });
+
+
+adminMonthSummary?.addEventListener("click", event => {
+  const cell = event.target.closest(".admin-calendar-cell");
+  if (!cell || cell.classList.contains("is-other-month")) return;
+  openAdminDayDetailModal(cell.dataset.date);
+});
+
+let adminLongPressTimer = null;
+adminMonthSummary?.addEventListener("touchstart", event => {
+  const cell = event.target.closest(".admin-calendar-cell");
+  if (!cell || cell.classList.contains("is-other-month")) return;
+  adminLongPressTimer = setTimeout(() => openAdminDayDetailModal(cell.dataset.date), 420);
+}, { passive: true });
+adminMonthSummary?.addEventListener("touchend", () => {
+  clearTimeout(adminLongPressTimer);
+}, { passive: true });
+adminMonthSummary?.addEventListener("touchmove", () => {
+  clearTimeout(adminLongPressTimer);
+}, { passive: true });
 
 (async function init() {
   const ok = await requireAdmin();

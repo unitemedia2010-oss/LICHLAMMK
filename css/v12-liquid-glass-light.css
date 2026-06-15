@@ -1,0 +1,465 @@
+/* =========================================
+   V12 — LIGHT LIQUID GLASS
+   Giữ bố cục sạch của V11, bổ sung glass nhẹ và glow #FFD700 bên dưới.
+   Không áp dụng drag/biến dạng mạnh để tránh rối giao diện và lag mobile.
+========================================= */
+:root {
+  --liquid-gold: #FFD700;
+  --liquid-gold-rgb: 255, 215, 0;
+  --liquid-ink: #2A211F;
+  --liquid-brown: #5D4037;
+  --liquid-glass: rgba(255, 255, 255, .68);
+  --liquid-glass-strong: rgba(255, 255, 255, .82);
+  --liquid-border: rgba(255, 255, 255, .78);
+  --liquid-edge: rgba(93, 64, 55, .09);
+  --liquid-blur: blur(22px) saturate(1.18);
+  --liquid-shadow:
+    0 18px 52px rgba(65, 49, 43, .075),
+    inset 1px 1px 0 rgba(255, 255, 255, .88),
+    inset -1px -1px 0 rgba(93, 64, 55, .035);
+}
+
+html,
+body {
+  background: #F9F8F6 !important;
+}
+
+body {
+  position: relative;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 10% 100%, rgba(var(--liquid-gold-rgb), .11), transparent 33rem),
+    radial-gradient(circle at 96% 76%, rgba(var(--liquid-gold-rgb), .075), transparent 28rem),
+    linear-gradient(180deg, #FCFBF9 0%, #F9F8F6 44%, #F7F3EA 100%) !important;
+}
+
+/* Gold chỉ nằm dưới nền, không phủ vàng toàn trang */
+body::before {
+  content: "" !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: -3 !important;
+  pointer-events: none !important;
+  background:
+    radial-gradient(ellipse 46% 18% at 24% 96%, rgba(var(--liquid-gold-rgb), .19), transparent 72%),
+    radial-gradient(ellipse 42% 16% at 84% 84%, rgba(var(--liquid-gold-rgb), .12), transparent 72%),
+    linear-gradient(120deg, transparent 34%, rgba(255,255,255,.62) 50%, transparent 66%) !important;
+  background-size: auto !important;
+  opacity: 1 !important;
+  mask-image: none !important;
+}
+
+/* Logo lớn ẩn dưới lớp blur */
+body::after {
+  content: "UNITE" !important;
+  position: fixed !important;
+  top: 22vh !important;
+  right: -4vw !important;
+  left: auto !important;
+  transform: none !important;
+  z-index: -2 !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  font-size: clamp(120px, 25vw, 360px) !important;
+  line-height: .78 !important;
+  font-weight: 1000 !important;
+  letter-spacing: -.09em !important;
+  color: rgba(93, 64, 55, .026) !important;
+  text-shadow: 0 26px 70px rgba(var(--liquid-gold-rgb), .10) !important;
+  filter: blur(6px) !important;
+  opacity: 1 !important;
+}
+
+/* Header vẫn rõ nét, chỉ thêm viền kính và ánh vàng rất nhẹ ở chân */
+.topbar,
+.topbar.admin {
+  isolation: isolate;
+  overflow: visible;
+  box-shadow:
+    0 16px 42px rgba(55, 40, 35, .13),
+    0 20px 54px rgba(var(--liquid-gold-rgb), .055) !important;
+}
+
+.topbar::after,
+.topbar.admin::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -20px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(var(--liquid-gold-rgb), .14);
+  filter: blur(24px);
+  opacity: .72;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.account-menu-btn,
+.icon-btn,
+.topbar .btn.ghost,
+.topbar.admin .btn.ghost.light {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.23), rgba(255,255,255,.12)) !important;
+  border: 1px solid rgba(255,255,255,.35) !important;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.34),
+    inset -1px -1px 0 rgba(255,255,255,.09),
+    0 8px 24px rgba(37,24,21,.08) !important;
+  backdrop-filter: blur(18px) saturate(1.12) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
+}
+
+/* Các surface chính dùng cùng một ngôn ngữ liquid glass */
+.panel,
+.employee-hero,
+.progress-card,
+.calendar-shell,
+.auth-card,
+.uws-modal-card,
+.liquid-day-card,
+.account-menu,
+.notification-item,
+.time-range-card,
+.account-create-card,
+.danger-zone-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.83), rgba(255,255,255,.59)) !important;
+  border: 1px solid var(--liquid-border) !important;
+  box-shadow: var(--liquid-shadow) !important;
+  backdrop-filter: var(--liquid-blur) !important;
+  -webkit-backdrop-filter: var(--liquid-blur) !important;
+}
+
+/* Bend/highlight layer — mô phỏng component React nhưng nhẹ và không làm méo chữ */
+.panel::before,
+.employee-hero::before,
+.progress-card::before,
+.calendar-shell::before,
+.auth-card::before,
+.uws-modal-card::before,
+.liquid-day-card::before,
+.account-menu::before,
+.time-range-card::before,
+.account-create-card::before,
+.danger-zone-card::before {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+  background:
+    radial-gradient(circle at var(--liquid-x, 18%) var(--liquid-y, 10%), rgba(255,255,255,.90), transparent 25%),
+    radial-gradient(circle at 88% 88%, rgba(var(--liquid-gold-rgb), .055), transparent 30%),
+    linear-gradient(135deg, rgba(255,255,255,.30), transparent 40%, rgba(255,255,255,.08)) !important;
+  opacity: .78 !important;
+  filter: url(#uws-liquid-distortion) !important;
+}
+
+/* Gold underglow riêng biệt, không nhuộm vàng nội dung */
+.panel::after,
+.employee-hero::after,
+.calendar-shell::after,
+.auth-card::after,
+.uws-modal-card::after,
+.liquid-day-card::after,
+.account-create-card::after,
+.danger-zone-card::after {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  left: 14% !important;
+  right: 14% !important;
+  bottom: -22px !important;
+  height: 36px !important;
+  border-radius: 999px !important;
+  background: rgba(var(--liquid-gold-rgb), .12) !important;
+  filter: blur(23px) !important;
+  opacity: .78 !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
+}
+
+.panel > *,
+.employee-hero > *,
+.progress-card > *,
+.calendar-shell > *,
+.auth-card > *,
+.uws-modal-card > *,
+.liquid-day-card > *,
+.account-menu > *,
+.time-range-card > *,
+.account-create-card > *,
+.danger-zone-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Metric: glass rõ hơn một chút nhưng icon vẫn tối giản */
+.metric {
+  overflow: hidden !important;
+  background:
+    linear-gradient(150deg, rgba(255,255,255,.91), rgba(255,255,255,.66)) !important;
+  transition: transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s ease !important;
+}
+
+.metric:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 24px 58px rgba(65,49,43,.10),
+    0 18px 44px rgba(var(--liquid-gold-rgb), .07),
+    inset 1px 1px 0 rgba(255,255,255,.92) !important;
+}
+
+.metric::before {
+  z-index: 1 !important;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.96), rgba(255,247,205,.72)) !important;
+  border: 1px solid rgba(var(--liquid-gold-rgb), .20) !important;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.92),
+    0 10px 26px rgba(var(--liquid-gold-rgb), .08) !important;
+}
+
+/* Button glass, không bóng quá mức */
+.btn,
+.tab-btn,
+.calendar-legend span,
+.admin-chip,
+.badge {
+  transition:
+    transform .16s cubic-bezier(.2,.8,.2,1),
+    background .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease !important;
+}
+
+.btn:hover,
+.tab-btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:active,
+.tab-btn:active,
+.account-menu-btn:active {
+  transform: scale(.975);
+}
+
+.month-actions {
+  background: rgba(255,255,255,.48) !important;
+  border: 1px solid rgba(255,255,255,.78) !important;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.88),
+    0 10px 26px rgba(65,49,43,.045) !important;
+  backdrop-filter: blur(18px) saturate(1.12) !important;
+}
+
+.month-actions #todayBtn,
+.month-actions #adminTodayBtn {
+  border: 1px solid rgba(var(--liquid-gold-rgb), .16) !important;
+  box-shadow:
+    0 5px 16px rgba(65,49,43,.05),
+    0 6px 20px rgba(var(--liquid-gold-rgb), .055),
+    inset 1px 1px 0 rgba(255,255,255,.95) !important;
+}
+
+.calendar-legend {
+  background: rgba(255,255,255,.46) !important;
+  border: 1px solid rgba(255,255,255,.78) !important;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.88) !important;
+  backdrop-filter: blur(16px) saturate(1.1) !important;
+}
+
+/* Lịch vẫn sạch; glass chỉ đủ để có chiều sâu */
+.month-calendar .calendar-cell,
+.admin-month-calendar .admin-calendar-cell {
+  position: relative;
+  isolation: isolate;
+  background: rgba(255,255,255,.43) !important;
+  border: 1px solid rgba(255,255,255,.72) !important;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.82),
+    0 7px 20px rgba(65,49,43,.028) !important;
+  backdrop-filter: blur(14px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.05) !important;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease !important;
+}
+
+.month-calendar .calendar-cell:hover,
+.admin-month-calendar .admin-calendar-cell:hover {
+  transform: translateY(-2px);
+  border-color: rgba(var(--liquid-gold-rgb), .26) !important;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.90),
+    0 12px 28px rgba(65,49,43,.06),
+    0 10px 24px rgba(var(--liquid-gold-rgb), .055) !important;
+}
+
+.month-calendar .calendar-cell.status-pending,
+.admin-month-calendar .admin-calendar-cell.has-pending {
+  background: linear-gradient(145deg, rgba(255,255,255,.66), rgba(255,241,242,.78)) !important;
+}
+
+.month-calendar .calendar-cell.status-approved,
+.admin-month-calendar .admin-calendar-cell.has-approved {
+  background: linear-gradient(145deg, rgba(255,255,255,.66), rgba(236,253,243,.82)) !important;
+}
+
+.month-calendar .calendar-cell.status-leave,
+.month-calendar .calendar-cell.status-leave-pending {
+  background: linear-gradient(145deg, rgba(255,255,255,.66), rgba(238,242,255,.82)) !important;
+}
+
+.month-calendar .calendar-cell.status-busy {
+  background: linear-gradient(145deg, rgba(255,255,255,.66), rgba(239,246,255,.82)) !important;
+}
+
+/* Hôm nay chỉ viền vàng, tuyệt đối không thêm chữ */
+.calendar-cell.is-today,
+.admin-calendar-cell.is-today {
+  background: rgba(255,255,255,.62) !important;
+  border-color: rgba(var(--liquid-gold-rgb), .72) !important;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(var(--liquid-gold-rgb), .94),
+    0 8px 24px rgba(var(--liquid-gold-rgb), .10),
+    inset 1px 1px 0 rgba(255,255,255,.92) !important;
+}
+
+.calendar-cell.is-today::before,
+.calendar-cell.is-today::after,
+.admin-calendar-cell.is-today::before,
+.admin-calendar-cell.is-today::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Modal detail / popup: glass rõ nhất, bay ra nhẹ */
+.uws-modal-backdrop,
+.liquid-day-backdrop {
+  background:
+    radial-gradient(circle at 50% 82%, rgba(var(--liquid-gold-rgb), .12), transparent 26rem),
+    rgba(42, 33, 31, .26) !important;
+  backdrop-filter: blur(13px) saturate(1.08) !important;
+  -webkit-backdrop-filter: blur(13px) saturate(1.08) !important;
+}
+
+.uws-modal-card,
+.liquid-day-card {
+  background:
+    radial-gradient(circle at 18% 0%, rgba(var(--liquid-gold-rgb), .075), transparent 18rem),
+    linear-gradient(145deg, rgba(255,255,255,.91), rgba(255,255,255,.70)) !important;
+  border: 1px solid rgba(255,255,255,.90) !important;
+  box-shadow:
+    0 34px 100px rgba(42,33,31,.20),
+    0 24px 72px rgba(var(--liquid-gold-rgb), .085),
+    inset 2px 2px 2px rgba(255,255,255,.72),
+    inset -2px -2px 2px rgba(93,64,55,.035) !important;
+  animation: v12LiquidFloat .32s cubic-bezier(.2,.88,.2,1) !important;
+}
+
+@keyframes v12LiquidFloat {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(.975);
+    filter: blur(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.liquid-stat,
+.liquid-event,
+.modal-info-grid > div,
+.notification-item {
+  background: rgba(255,255,255,.54) !important;
+  border: 1px solid rgba(255,255,255,.82) !important;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.90),
+    0 8px 24px rgba(65,49,43,.035) !important;
+  backdrop-filter: blur(15px) saturate(1.06) !important;
+}
+
+/* Inputs: sáng, rõ và đồng nhất với glass */
+input,
+select,
+textarea {
+  background: rgba(255,255,255,.72) !important;
+  border-color: rgba(93,64,55,.12) !important;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.86) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(var(--liquid-gold-rgb), .64) !important;
+  box-shadow:
+    0 0 0 4px rgba(var(--liquid-gold-rgb), .10),
+    inset 1px 1px 0 rgba(255,255,255,.92) !important;
+}
+
+/* Mobile: tiết chế blur để giữ hiệu năng, lịch vẫn 7 cột */
+@media (max-width: 720px) {
+  body::after {
+    display: block !important;
+    top: 42vh !important;
+    right: -26vw !important;
+    font-size: 52vw !important;
+    filter: blur(8px) !important;
+    opacity: .68 !important;
+  }
+
+  .panel,
+  .employee-hero,
+  .progress-card,
+  .calendar-shell,
+  .uws-modal-card,
+  .liquid-day-card,
+  .account-menu {
+    backdrop-filter: blur(17px) saturate(1.10) !important;
+    -webkit-backdrop-filter: blur(17px) saturate(1.10) !important;
+  }
+
+  .panel::after,
+  .employee-hero::after,
+  .calendar-shell::after,
+  .uws-modal-card::after,
+  .liquid-day-card::after {
+    bottom: -16px !important;
+    height: 28px !important;
+    opacity: .58 !important;
+  }
+
+  .month-calendar .calendar-cell,
+  .admin-month-calendar .admin-calendar-cell {
+    border-radius: 14px !important;
+    backdrop-filter: blur(10px) saturate(1.02) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(1.02) !important;
+  }
+
+  .month-calendar .calendar-cell:hover,
+  .admin-month-calendar .admin-calendar-cell:hover {
+    transform: none;
+  }
+
+  .metric:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

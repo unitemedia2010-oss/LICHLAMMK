@@ -1,3 +1,7 @@
+# Unite Work Schedule v14 – Responsive Hotfix
+
+Bản này sửa lỗi header mobile bị bóp chữ thành từng dòng và các nút tài khoản tràn khỏi màn hình. CSS v14 phải được tải sau `style.css` và `v13-enterprise-responsive.css`. Không cần chạy thêm SQL.
+
 # Unite Work Schedule - UI Polished
 
 Bản này tối ưu lại giao diện để hệ thống nhìn gọn, sang và dễ dùng hơn trên desktop/mobile, nhưng vẫn giữ nguyên các ID/class quan trọng để không ảnh hưởng luồng JS hiện tại.
@@ -73,3 +77,10 @@ unite-work-schedule-ui-polished/
 2. Vào Supabase SQL Editor.
 3. Chạy file `database/upgrade-v4.sql`.
 4. Reload web bằng Ctrl + Shift + R.
+
+## V11 - Reference Clean Calendar
+
+- Giao diện mobile bám theo sườn React tham khảo.
+- Lịch tháng mobile dạng grid 7 cột gọn.
+- Hôm nay chỉ tô viền vàng, không hiện chữ.
+- Không cần chạy thêm SQL so với bản v8/v10.

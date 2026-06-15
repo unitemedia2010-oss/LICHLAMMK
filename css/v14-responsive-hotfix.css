@@ -1,0 +1,196 @@
+/* =========================================================
+   V14 RESPONSIVE HOTFIX
+   Fixes mobile header squeeze/overflow caused by legacy CSS.
+   Loaded last, after style.css and v13-enterprise-responsive.css.
+========================================================= */
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* Prevent the title column from collapsing into one-word lines. */
+.topbar {
+  width: 100%;
+}
+
+.topbar > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.topbar .brand-line,
+.topbar h1 {
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  hyphens: none;
+}
+
+.topbar-actions {
+  width: auto !important;
+  min-width: 0;
+  max-width: max-content;
+  margin-left: auto;
+  flex: 0 0 auto;
+  flex-wrap: nowrap !important;
+  justify-content: flex-end;
+}
+
+.topbar-actions > * {
+  flex: 0 0 auto;
+}
+
+.account-menu-wrap {
+  min-width: 0;
+}
+
+/* Mobile header: compact icon actions, stable title width. */
+@media (max-width: 760px) {
+  .topbar,
+  .topbar.admin {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center !important;
+    column-gap: 10px;
+    row-gap: 0;
+    min-height: 68px;
+    padding:
+      calc(9px + env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      9px
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .topbar > div:first-child {
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0;
+  }
+
+  .topbar .brand-line {
+    max-width: 100%;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 8px;
+    line-height: 1.25;
+    letter-spacing: .12em;
+  }
+
+  .topbar h1 {
+    width: 100%;
+    max-width: none !important;
+    margin: 3px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(15px, 4.2vw, 18px);
+    line-height: 1.2;
+  }
+
+  .topbar-actions {
+    width: auto !important;
+    max-width: none;
+    gap: 7px;
+    margin: 0;
+  }
+
+  .topbar-actions .btn,
+  .topbar-actions .icon-btn,
+  .topbar-actions .account-menu-btn,
+  .topbar.admin .topbar-actions .btn.ghost.light {
+    position: relative;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 42px;
+    min-height: 42px !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 0 !important;
+    border-radius: 12px !important;
+  }
+
+  .topbar-actions .button-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .topbar-actions .icon-btn > span:not(.button-icon):not(.notif-badge),
+  .topbar-actions .account-label,
+  .topbar-actions .role-pill,
+  .topbar-actions .chevron {
+    display: none !important;
+  }
+
+  .topbar-actions .notif-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .account-menu {
+    position: fixed !important;
+    top: calc(68px + env(safe-area-inset-top)) !important;
+    right: max(10px, env(safe-area-inset-right)) !important;
+    left: auto !important;
+    width: min(260px, calc(100vw - 20px)) !important;
+    max-width: calc(100vw - 20px);
+    z-index: 1000;
+  }
+
+  /* Keep the rest of the page inside the viewport. */
+  .container,
+  .employee-app {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .panel,
+  .employee-hero,
+  .progress-card,
+  .calendar-shell,
+  .table-wrap {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* Very narrow devices: preserve two icon buttons and readable title. */
+@media (max-width: 360px) {
+  .topbar,
+  .topbar.admin {
+    column-gap: 7px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .topbar-actions {
+    gap: 5px;
+  }
+
+  .topbar-actions .btn,
+  .topbar-actions .icon-btn,
+  .topbar-actions .account-menu-btn,
+  .topbar.admin .topbar-actions .btn.ghost.light {
+    width: 39px !important;
+    min-width: 39px !important;
+    max-width: 39px !important;
+    height: 39px;
+    min-height: 39px !important;
+  }
+
+  .topbar h1 {
+    font-size: 14px;
+  }
+}
