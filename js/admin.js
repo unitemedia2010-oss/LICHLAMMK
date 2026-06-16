@@ -1,3 +1,8 @@
+"use strict";
+
+/* UWS_PAGE_SCOPE */
+(() => {
+
 const {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
@@ -30,6 +35,7 @@ let adminMonthRowsByDate = {};
 const profileSettingsTable = document.getElementById("profileSettingsTable");
 const profileSettingsMessage = document.getElementById("profileSettingsMessage");
 const createAccountMessage = document.getElementById("createAccountMessage");
+const createAccountBtn = document.getElementById("createAccountBtn");
 const accountAdminPanel = document.getElementById("accountAdminPanel");
 const dangerZonePanel = document.getElementById("dangerZonePanel");
 const TIME_META_REGEX = /\[\[UWS_TIME:(\d{2}:\d{2})-(\d{2}:\d{2})\]\]\s*/;
@@ -43,6 +49,96 @@ const currentPasswordInput = document.getElementById("currentPasswordInput");
 const newPasswordInput = document.getElementById("newPasswordInput");
 const confirmNewPasswordInput = document.getElementById("confirmNewPasswordInput");
 const changePasswordMessage = document.getElementById("changePasswordMessage");
+let createAccountBusy = false;
+let profileSettingsCache = [];
+let scopeProfilesCache = [];
+
+const adminAreaFilter = document.getElementById("adminAreaFilter");
+const adminTeamFilter = document.getElementById("adminTeamFilter");
+const adminScopeNote = document.getElementById("adminScopeNote");
+const profileManagerModal = document.getElementById("profileManagerModal");
+const profileSearchInput = document.getElementById("profileSearchInput");
+const profileSearchSummary = document.getElementById("profileSearchSummary");
+const excelExportModal = document.getElementById("excelExportModal");
+const excelExportMonth = document.getElementById("excelExportMonth");
+const excelExportArea = document.getElementById("excelExportArea");
+const excelExportTeam = document.getElementById("excelExportTeam");
+const excelExportStatus = document.getElementById("excelExportStatus");
+const excelExportMessage = document.getElementById("excelExportMessage");
+const excelExportScopeNote = document.getElementById("excelExportScopeNote");
+const downloadExcelBtn = document.getElementById("downloadExcelBtn");
+
+function getAdminCreateUserUrl() {
+  return `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/admin-create-user`;
+}
+
+function getCreateAccountDeployHint() {
+  return "Chạy trong thư mục project: npx supabase link --project-ref moohpectkjtpbyrqeocq; npx supabase functions deploy admin-create-user --no-verify-jwt";
+}
+
+function setCreateAccountBusy(isBusy) {
+  createAccountBusy = isBusy;
+  if (!createAccountBtn) return;
+  createAccountBtn.disabled = isBusy;
+  createAccountBtn.textContent = isBusy ? "Đang tạo..." : "Tạo tài khoản";
+}
+
+async function readJsonResponse(res) {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
+function getCreateAccountErrorMessage(status, statusText, body = {}) {
+  const detail = body.message || body.error || body.msg || body.error_description || `${status} ${statusText}`;
+  if (status === 404) {
+    return `Edge Function admin-create-user chưa được deploy hoặc sai project ref (endpoint trả 404). ${getCreateAccountDeployHint()}`;
+  }
+  if (status === 401) {
+    return `Phiên đăng nhập hoặc JWT của Edge Function không hợp lệ. Hãy đăng nhập lại; nếu vừa deploy function, nhớ dùng --no-verify-jwt. Chi tiết: ${detail}`;
+  }
+  if (status === 403) {
+    return `Tài khoản hiện tại chưa phải SUPER_ADMIN active hoặc bị chặn quyền tạo tài khoản. Chi tiết: ${detail}`;
+  }
+  if (status === 409) {
+    return `Email hoặc mã nhân sự đã tồn tại. Chi tiết: ${detail}`;
+  }
+  if (status === 422) {
+    return `Dữ liệu tài khoản chưa hợp lệ. Chi tiết: ${detail}`;
+  }
+  if (status >= 500) {
+    return `Edge Function đang lỗi server. Kiểm tra biến môi trường bảo mật và log của Edge Function. Chi tiết: ${detail}`;
+  }
+  return detail;
+}
+
+async function checkCreateUserFunctionAvailability() {
+  if (!isSuperAdmin() || !createAccountMessage) return;
+
+  try {
+    const res = await fetch(getAdminCreateUserUrl(), {
+      method: "OPTIONS",
+      headers: {
+        apikey: SUPABASE_ANON_KEY
+      }
+    });
+
+    if (res.status === 404) {
+      showMessage(createAccountMessage, `Chưa deploy Edge Function admin-create-user nên chưa tạo được tài khoản từ web. ${getCreateAccountDeployHint()}`, "warn");
+      return;
+    }
+
+    if (!res.ok && res.status >= 500) {
+      showMessage(createAccountMessage, `Edge Function đang phản hồi lỗi ${res.status}. Kiểm tra Supabase Function logs trước khi tạo tài khoản.`, "warn");
+    }
+  } catch (err) {
+    showMessage(createAccountMessage, `Chưa kết nối được Edge Function admin-create-user. Nếu bấm tạo tài khoản đang báo Failed to fetch thì gần như chắc function chưa deploy/CORS chưa có. ${getCreateAccountDeployHint()}`, "warn");
+  }
+}
 
 function getWeekDates() {
   return Array.from({ length: 7 }, (_, i) => addDays(selectedWeekStart, i));
@@ -94,10 +190,29 @@ function parseScheduleNote(note) {
   };
 }
 
+const LEAVE_PERIOD_LABELS = {
+  full_shift: "Toàn bộ ca",
+  first_half: "Nửa đầu ca",
+  last_half: "Nửa cuối ca",
+  custom: "Theo giờ"
+};
+
+function normalizeTime(value) {
+  return value ? String(value).slice(0, 5) : "";
+}
+
+function formatLeavePeriod(row) {
+  const period = row.leave_period || "full_shift";
+  const start = normalizeTime(row.leave_start_time);
+  const end = normalizeTime(row.leave_end_time);
+  if (start && end) return `${LEAVE_PERIOD_LABELS[period] || "Theo giờ"} • ${start} - ${end}`;
+  return `${LEAVE_PERIOD_LABELS[period] || "Toàn bộ ca"} • ${SHIFT_LABELS[row.shift] || row.shift}`;
+}
+
 function requireShiftLabel(row) {
   if (row.is_off || row.shift === "off") return "OFF";
   const meta = parseScheduleNote(row.note);
-  return `${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? ` • ${meta.timeText}` : ""}`;
+  return `${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? ` • ${escapeHtml(meta.timeText)}` : ""}`;
 }
 
 function displayProfileName(profile) {
@@ -116,6 +231,133 @@ function isAdmin() {
 
 function isLeader() {
   return currentProfile?.role_type === "LEADER";
+}
+
+function normalizeScopeValue(value) {
+  return String(value || "").trim().toLocaleLowerCase("vi");
+}
+
+function uniqueSorted(values) {
+  return [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "vi"));
+}
+
+function getOperationalScope() {
+  if (isLeader()) {
+    return {
+      area: String(currentProfile?.area || "").trim(),
+      team: String(currentProfile?.team || "").trim()
+    };
+  }
+  return {
+    area: String(adminAreaFilter?.value || "").trim(),
+    team: String(adminTeamFilter?.value || "").trim()
+  };
+}
+
+function profileMatchesScope(profile, scope = getOperationalScope()) {
+  if (!profile) return false;
+  if (scope.area && normalizeScopeValue(profile.area) !== normalizeScopeValue(scope.area)) return false;
+  if (scope.team && normalizeScopeValue(profile.team) !== normalizeScopeValue(scope.team)) return false;
+  return true;
+}
+
+function getScopedProfiles() {
+  return scopeProfilesCache.filter(profile => profile.status === "active" && profileMatchesScope(profile));
+}
+
+function setSelectOptions(select, values, allLabel, selectedValue = "", disabled = false) {
+  if (!select) return;
+  const normalizedSelected = normalizeScopeValue(selectedValue);
+  const hasSelected = values.some(value => normalizeScopeValue(value) === normalizedSelected);
+  const safeSelected = selectedValue && !hasSelected ? [selectedValue, ...values] : values;
+  select.innerHTML = `<option value="">${escapeHtml(allLabel)}</option>${safeSelected.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("")}`;
+  select.value = selectedValue || "";
+  select.disabled = disabled;
+}
+
+function rebuildAdminTeamFilter({ preserve = true } = {}) {
+  if (!adminTeamFilter) return;
+  const selectedArea = isLeader()
+    ? String(currentProfile?.area || "").trim()
+    : String(adminAreaFilter?.value || "").trim();
+  const previous = preserve ? String(adminTeamFilter.value || "").trim() : "";
+  const teams = uniqueSorted(scopeProfilesCache
+    .filter(profile => !selectedArea || normalizeScopeValue(profile.area) === normalizeScopeValue(selectedArea))
+    .map(profile => profile.team));
+
+  if (isLeader()) {
+    const ownTeam = String(currentProfile?.team || "").trim();
+    setSelectOptions(adminTeamFilter, teams, ownTeam ? "Team của Leader" : "Chưa cấu hình team", ownTeam, true);
+  } else {
+    const canKeep = teams.some(team => normalizeScopeValue(team) === normalizeScopeValue(previous));
+    setSelectOptions(adminTeamFilter, teams, "Tất cả team", canKeep ? previous : "", false);
+  }
+}
+
+function updateAdminScopeNote() {
+  if (!adminScopeNote) return;
+  const scope = getOperationalScope();
+  if (isLeader()) {
+    if (!scope.area || !scope.team) {
+      adminScopeNote.textContent = "Leader chưa được cấu hình đủ Khu vực và Team. Hệ thống chỉ hiển thị dữ liệu của chính tài khoản này cho đến khi SUPER_ADMIN cập nhật hồ sơ.";
+      return;
+    }
+    adminScopeNote.textContent = `Phạm vi Leader: ${scope.area} • Team ${scope.team}. Không thể xem dữ liệu ngoài phạm vi này.`;
+    return;
+  }
+  const parts = [];
+  if (scope.area) parts.push(`Khu vực ${scope.area}`);
+  if (scope.team) parts.push(`Team ${scope.team}`);
+  adminScopeNote.textContent = parts.length ? `Đang lọc: ${parts.join(" • ")}.` : "Đang xem toàn bộ khu vực và team được phân quyền.";
+}
+
+async function loadScopeProfiles() {
+  let { data, error } = await supabase
+    .from("profiles")
+    .select("id, employee_code, full_name, role_type, area, team, email, status")
+    .in("role_type", ["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"])
+    .order("full_name", { ascending: true });
+
+  if (error && /column profiles\.area does not exist|area.*does not exist/i.test(error.message || "")) {
+    const fallback = await supabase
+      .from("profiles")
+      .select("id, employee_code, full_name, role_type, team, email, status")
+      .in("role_type", ["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"])
+      .order("full_name", { ascending: true });
+    data = (fallback.data || []).map(profile => ({ ...profile, area: null }));
+    error = fallback.error;
+  }
+
+  if (error) {
+    scopeProfilesCache = [];
+    if (adminScopeNote) adminScopeNote.textContent = `Không tải được phạm vi nhân sự: ${error.message}`;
+    return;
+  }
+
+  scopeProfilesCache = data || [];
+  const areas = uniqueSorted(scopeProfilesCache.map(profile => profile.area));
+
+  if (isLeader()) {
+    const ownArea = String(currentProfile?.area || "").trim();
+    setSelectOptions(adminAreaFilter, areas, ownArea ? "Khu vực của Leader" : "Chưa cấu hình khu vực", ownArea, true);
+  } else {
+    const previousArea = String(adminAreaFilter?.value || "").trim();
+    const canKeepArea = areas.some(area => normalizeScopeValue(area) === normalizeScopeValue(previousArea));
+    setSelectOptions(adminAreaFilter, areas, "Tất cả khu vực", canKeepArea ? previousArea : "", false);
+  }
+  rebuildAdminTeamFilter({ preserve: true });
+  updateAdminScopeNote();
+}
+
+async function refreshOperationalData() {
+  await Promise.all([
+    loadMetrics(),
+    loadMonthSummary(),
+    loadPendingSchedules(),
+    loadPendingLeaves(),
+    loadAllSchedules()
+  ]);
 }
 
 function applyRoleBasedUi() {
@@ -167,6 +409,12 @@ async function requireAdmin() {
     return false;
   }
 
+  if (currentProfile.status !== "active") {
+    await supabase.auth.signOut();
+    window.location.href = "./index.html";
+    return false;
+  }
+
   if (!ADMIN_ROLES.includes(currentProfile.role_type)) {
     window.location.href = "./employee.html";
     return false;
@@ -180,41 +428,51 @@ async function loadMetrics() {
   const weekDates = getWeekDates();
   const start = toISODate(weekDates[0]);
   const end = toISODate(weekDates[6]);
+  const allowedIds = new Set(getScopedProfiles().map(profile => profile.id));
 
-  const [{ count: pendingScheduleCount }, { count: approvedWeekCount }, { count: pendingLeaveCount }, { count: employeeCount }] = await Promise.all([
-    supabase.from("schedule_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("schedule_requests").select("*", { count: "exact", head: true }).eq("status", "approved").gte("work_date", start).lte("work_date", end),
-    supabase.from("leave_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("profiles").select("*", { count: "exact", head: true }).in("role_type", ["TTS","NVPT"]).eq("status", "active")
+  const [pendingScheduleRes, approvedScheduleRes, pendingLeaveRes] = await Promise.all([
+    supabase.from("schedule_requests").select("employee_id").eq("status", "pending"),
+    supabase.from("schedule_requests").select("employee_id").eq("status", "approved").gte("work_date", start).lte("work_date", end),
+    supabase.from("leave_requests").select("employee_id").eq("status", "pending")
   ]);
 
-  document.getElementById("pendingScheduleCount").textContent = pendingScheduleCount || 0;
-  document.getElementById("approvedWeekCount").textContent = approvedWeekCount || 0;
-  document.getElementById("pendingLeaveCount").textContent = pendingLeaveCount || 0;
-  document.getElementById("employeeCount").textContent = employeeCount || 0;
+  const countScoped = rows => (rows || []).filter(row => allowedIds.has(row.employee_id)).length;
+  const employeeCount = getScopedProfiles().filter(profile => ["TTS", "NVPT"].includes(profile.role_type)).length;
+
+  document.getElementById("pendingScheduleCount").textContent = countScoped(pendingScheduleRes.data);
+  document.getElementById("approvedWeekCount").textContent = countScoped(approvedScheduleRes.data);
+  document.getElementById("pendingLeaveCount").textContent = countScoped(pendingLeaveRes.data);
+  document.getElementById("employeeCount").textContent = employeeCount;
 }
 
-async function loadProfileSettings() {
+function renderProfileSettings(query = "") {
   if (!profileSettingsTable || !isSuperAdmin()) return;
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, employee_code, full_name, email, phone, role_type, team, status, min_days_per_month")
-    .in("role_type", ["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"])
-    .order("role_type", { ascending: true })
-    .order("employee_code", { ascending: true });
+  const normalized = String(query || "").trim().toLocaleLowerCase("vi");
+  const filtered = !normalized
+    ? profileSettingsCache
+    : profileSettingsCache.filter(profile => [
+        profile.employee_code,
+        profile.full_name,
+        profile.email,
+        profile.role_type,
+        profile.area,
+        profile.team,
+        profile.status
+      ].some(value => String(value || "").toLocaleLowerCase("vi").includes(normalized)));
 
-  if (error) {
-    profileSettingsTable.innerHTML = `<tr><td colspan="8" class="empty-row">${error.message}</td></tr>`;
+  if (profileSearchSummary) {
+    profileSearchSummary.textContent = normalized
+      ? `Tìm thấy ${filtered.length}/${profileSettingsCache.length} tài khoản phù hợp.`
+      : `Đang hiển thị ${profileSettingsCache.length} tài khoản.`;
+  }
+
+  if (!filtered.length) {
+    profileSettingsTable.innerHTML = `<tr><td colspan="9" class="empty-row">Không tìm thấy tài khoản phù hợp.</td></tr>`;
     return;
   }
 
-  if (!data?.length) {
-    profileSettingsTable.innerHTML = `<tr><td colspan="8" class="empty-row">Chưa có tài khoản để cấu hình.</td></tr>`;
-    return;
-  }
-
-  profileSettingsTable.innerHTML = data.map(profile => `
+  profileSettingsTable.innerHTML = filtered.map(profile => `
     <tr data-profile-id="${profile.id}">
       <td><b>${escapeHtml(profile.employee_code || "")}</b></td>
       <td><input class="profile-name-input" type="text" value="${escapeHtml(profile.full_name || "")}" placeholder="Nhập họ tên" /></td>
@@ -224,6 +482,7 @@ async function loadProfileSettings() {
           ${["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"].map(role => `<option value="${role}" ${profile.role_type === role ? "selected" : ""}>${role}</option>`).join("")}
         </select>
       </td>
+      <td><input class="profile-area-input" type="text" value="${escapeHtml(profile.area || "")}" placeholder="Khu vực / phòng ban" /></td>
       <td><input class="profile-team-input" type="text" value="${escapeHtml(profile.team || "")}" placeholder="Team" /></td>
       <td><input class="profile-target-input" type="number" min="0" max="31" value="${Number(profile.min_days_per_month || 0)}" /></td>
       <td>
@@ -237,6 +496,40 @@ async function loadProfileSettings() {
   `).join("");
 }
 
+async function loadProfileSettings() {
+  if (!profileSettingsTable || !isSuperAdmin()) return;
+
+  profileSettingsTable.innerHTML = `<tr><td colspan="9" class="empty-row">Đang tải danh sách tài khoản...</td></tr>`;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, employee_code, full_name, email, phone, role_type, area, team, status, min_days_per_month")
+    .in("role_type", ["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"])
+    .order("role_type", { ascending: true })
+    .order("employee_code", { ascending: true });
+
+  if (error) {
+    profileSettingsCache = [];
+    profileSettingsTable.innerHTML = `<tr><td colspan="9" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
+    return;
+  }
+
+  profileSettingsCache = data || [];
+  renderProfileSettings(profileSearchInput?.value || "");
+}
+
+function openProfileManager() {
+  if (!isSuperAdmin()) return;
+  profileManagerModal?.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  loadProfileSettings().then(() => profileSearchInput?.focus());
+}
+
+function closeProfileManager() {
+  profileManagerModal?.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+  if (profileSettingsMessage) showMessage(profileSettingsMessage, "");
+}
+
 async function updateProfileSetting(profileId) {
   if (!isSuperAdmin()) {
     showMessage(profileSettingsMessage, "Chỉ SUPER_ADMIN mới được quản trị tài khoản.", "err");
@@ -248,9 +541,16 @@ async function updateProfileSetting(profileId) {
 
   const fullName = row.querySelector(".profile-name-input")?.value.trim();
   const roleType = row.querySelector(".profile-role-input")?.value;
+  const area = row.querySelector(".profile-area-input")?.value.trim();
   const team = row.querySelector(".profile-team-input")?.value.trim();
   const minDays = Number(row.querySelector(".profile-target-input")?.value || 0);
   const status = row.querySelector(".profile-status-input")?.value;
+
+  if (profileId === currentUser?.id && (roleType !== "SUPER_ADMIN" || status !== "active")) {
+    showMessage(profileSettingsMessage, "Không thể tự hạ quyền hoặc khóa tài khoản SUPER_ADMIN đang đăng nhập.", "err");
+    await loadProfileSettings();
+    return;
+  }
 
   if (!fullName || fullName.length < 2) {
     showMessage(profileSettingsMessage, "Vui lòng nhập họ tên hợp lệ.", "err");
@@ -262,6 +562,11 @@ async function updateProfileSetting(profileId) {
     return;
   }
 
+  if (roleType === "LEADER" && (!area || !team)) {
+    showMessage(profileSettingsMessage, "Hồ sơ LEADER cần có đủ Khu vực và Team để giới hạn đúng phạm vi quản lý.", "err");
+    return;
+  }
+
   showMessage(profileSettingsMessage, "Đang lưu cấu hình nhân sự...");
 
   const { error } = await supabase
@@ -269,6 +574,7 @@ async function updateProfileSetting(profileId) {
     .update({
       full_name: fullName,
       role_type: roleType,
+      area: area || null,
       team: team || null,
       min_days_per_month: minDays,
       status
@@ -291,14 +597,15 @@ function getAccountFormPayload() {
     employee_code: document.getElementById("newAccountCode")?.value.trim() || "",
     full_name: document.getElementById("newAccountName")?.value.trim() || "",
     role_type: document.getElementById("newAccountRole")?.value || "TTS",
+    area: document.getElementById("newAccountArea")?.value.trim() || null,
     team: document.getElementById("newAccountTeam")?.value.trim() || null,
     min_days_per_month: Number(document.getElementById("newAccountTarget")?.value || 0),
     status: document.getElementById("newAccountStatus")?.value || "active"
   };
 }
 
-function clearAccountForm() {
-  ["newAccountEmail", "newAccountPassword", "newAccountCode", "newAccountName"].forEach(id => {
+function clearAccountForm(options = {}) {
+  ["newAccountEmail", "newAccountPassword", "newAccountCode", "newAccountName", "newAccountArea"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
@@ -310,7 +617,7 @@ function clearAccountForm() {
   if (target) target.value = "12";
   if (role) role.value = "TTS";
   if (status) status.value = "active";
-  showMessage(createAccountMessage, "");
+  if (options.clearMessage !== false) showMessage(createAccountMessage, "");
 }
 
 function validateAccountPayload(payload) {
@@ -320,10 +627,13 @@ function validateAccountPayload(payload) {
   if (!payload.full_name || payload.full_name.length < 2) return "Họ tên hiển thị chưa hợp lệ.";
   if (!Number.isFinite(payload.min_days_per_month) || payload.min_days_per_month < 0 || payload.min_days_per_month > 31) return "Chỉ tiêu tháng phải từ 0 đến 31 ngày.";
   if (!["TTS", "NVPT", "LEADER", "ADMIN", "SUPER_ADMIN"].includes(payload.role_type)) return "Vai trò chưa hợp lệ.";
+  if (payload.role_type === "LEADER" && (!payload.area || !payload.team)) return "Tài khoản LEADER cần có đủ Khu vực và Team để giới hạn đúng phạm vi quản lý.";
   return "";
 }
 
 async function createAccount() {
+  if (createAccountBusy) return;
+
   if (!isSuperAdmin()) {
     showMessage(createAccountMessage, "Chỉ SUPER_ADMIN mới được tạo tài khoản.", "err");
     return;
@@ -345,8 +655,9 @@ async function createAccount() {
 
   showMessage(createAccountMessage, "Đang tạo tài khoản qua Edge Function admin-create-user...");
 
+  setCreateAccountBusy(true);
   try {
-    const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/admin-create-user`, {
+    const res = await fetch(getAdminCreateUserUrl(), {
       method: "POST",
       headers: {
         apikey: SUPABASE_ANON_KEY,
@@ -356,19 +667,21 @@ async function createAccount() {
       body: JSON.stringify(payload)
     });
 
-    const json = await res.json().catch(() => ({}));
+    const json = await readJsonResponse(res);
 
     if (!res.ok) {
-      const message = json.message || json.error || `${res.status} ${res.statusText}`;
+      const message = getCreateAccountErrorMessage(res.status, res.statusText, json);
       showMessage(createAccountMessage, `Không tạo được tài khoản: ${message}`, "err");
       return;
     }
 
-    showMessage(createAccountMessage, "Đã tạo tài khoản và hồ sơ nhân sự.", "ok");
-    clearAccountForm();
+    clearAccountForm({ clearMessage: false });
+    showMessage(createAccountMessage, "Đã tạo tài khoản và hồ sơ nhân sự. Nhân sự có thể đăng nhập ngay.", "ok");
     await refreshAll();
   } catch (err) {
-    showMessage(createAccountMessage, `Không gọi được Edge Function. Hãy deploy admin-create-user trước. Chi tiết: ${err.message}`, "err");
+    showMessage(createAccountMessage, `Không gọi được Edge Function admin-create-user. Endpoint hiện tại: ${getAdminCreateUserUrl()}. ${getCreateAccountDeployHint()}. Chi tiết trình duyệt: ${err.message}`, "err");
+  } finally {
+    setCreateAccountBusy(false);
   }
 }
 
@@ -379,7 +692,7 @@ async function loadMonthSummary() {
   const [scheduleRes, offRes] = await Promise.all([
     supabase
       .from("schedule_requests")
-      .select("id, work_date, shift, status, note, submitted_at, profiles:employee_id(full_name, employee_code, team, email, role_type)")
+      .select("id, work_date, shift, status, note, submitted_at, profiles:employee_id(full_name, employee_code, area, team, email, role_type)")
       .gte("work_date", startIso)
       .lte("work_date", endIso)
       .in("status", ["pending", "approved"])
@@ -387,7 +700,7 @@ async function loadMonthSummary() {
       .order("submitted_at", { ascending: true }),
     supabase
       .from("unavailability")
-      .select("id, unavailable_date, shift, status, note, created_at, profiles:employee_id(full_name, employee_code, team, email, role_type)")
+      .select("id, unavailable_date, shift, status, note, created_at, profiles:employee_id(full_name, employee_code, area, team, email, role_type)")
       .gte("unavailable_date", startIso)
       .lte("unavailable_date", endIso)
       .eq("status", "active")
@@ -395,11 +708,11 @@ async function loadMonthSummary() {
   ]);
 
   if (scheduleRes.error || offRes.error) {
-    adminMonthSummary.innerHTML = `<div class="empty-row">${scheduleRes.error?.message || offRes.error?.message || "Không tải được lịch tháng."}</div>`;
+    adminMonthSummary.innerHTML = `<div class="empty-row">${escapeHtml(scheduleRes.error?.message || offRes.error?.message || "Không tải được lịch tháng.")}</div>`;
     return;
   }
 
-  adminMonthTitle.textContent = `Tháng ${selectedAdminMonth.getMonth() + 1}/${selectedAdminMonth.getFullYear()}`;
+  adminMonthTitle.textContent = `Đang xem Tháng ${selectedAdminMonth.getMonth() + 1}/${selectedAdminMonth.getFullYear()}`;
 
   const offRows = (offRes.data || [])
     .filter(row => String(row.note || "").includes(OFF_SUBMITTED_MARKER))
@@ -413,7 +726,9 @@ async function loadMonthSummary() {
       note: String(row.note || "").replace(OFF_SUBMITTED_MARKER, "").trim()
     }));
 
-  const rowsAll = [...(scheduleRes.data || []), ...offRows];
+  const scopedSchedules = (scheduleRes.data || []).filter(row => profileMatchesScope(row.profiles));
+  const scopedOffRows = offRows.filter(row => profileMatchesScope(row.profiles));
+  const rowsAll = [...scopedSchedules, ...scopedOffRows];
   const byDate = {};
   rowsAll.forEach(row => {
     const iso = String(row.work_date).slice(0, 10);
@@ -429,33 +744,40 @@ async function loadMonthSummary() {
     const approved = rows.filter(row => row.status === "approved").length;
     const pending = rows.filter(row => row.status === "pending").length;
     const offCount = rows.filter(row => row.status === "off").length;
+    const weeklyOff = date.getDay() === 0;
     const isOtherMonth = !sameAdminMonth(date) ? "is-other-month" : "";
     const isTodayClass = isToday(date) ? "is-today" : "";
     const eventClass = rows.length ? "has-events" : "";
     const pendingClass = pending ? "has-pending" : "";
     const approvedClass = approved ? "has-approved" : "";
     const offClass = offCount ? "has-off" : "";
+    const weeklyOffClass = weeklyOff ? "is-weekly-off" : "";
 
-    const eventsHtml = rows.length
+    const existingEventsHtml = rows.length
       ? rows.map(row => `
           <div class="admin-event ${row.status}">
-            <div class="admin-event-name">${displayProfileName(row.profiles)}</div>
-            <div class="admin-event-meta">${requireShiftLabel(row)}</div>
+            <div class="admin-event-name">${escapeHtml(displayProfileName(row.profiles))}</div>
+            <div class="admin-event-meta">${escapeHtml(requireShiftLabel(row))}</div>
           </div>
         `).join("")
-      : `<div class="admin-empty-cell">Trống</div>`;
+      : "";
+    const eventsHtml = weeklyOff
+      ? `<div class="admin-weekly-off"><b>Chủ Nhật</b><span>Nghỉ hàng tuần</span></div>${existingEventsHtml}`
+      : (existingEventsHtml || `<div class="admin-empty-cell">Trống</div>`);
 
     return `
-      <div class="calendar-cell admin-calendar-cell ${isOtherMonth} ${isTodayClass} ${eventClass} ${pendingClass} ${approvedClass} ${offClass}" data-date="${iso}">
+      <div class="calendar-cell admin-calendar-cell ${isOtherMonth} ${isTodayClass} ${eventClass} ${pendingClass} ${approvedClass} ${offClass} ${weeklyOffClass}" data-date="${iso}">
         <div class="cell-top">
           <div>
             <div class="date-number">${date.getDate()}</div>
             <div class="date-small">${formatDate(iso)}</div>
           </div>
           <div class="admin-day-stats">
-            <span class="admin-chip ok">Duyệt ${approved}</span>
-            <span class="admin-chip pending">Chờ ${pending}</span>
-            ${offCount ? `<span class="admin-chip off">OFF ${offCount}</span>` : ""}
+            ${weeklyOff ? `<span class="admin-chip weekly-off">CN OFF</span>` : `
+              <span class="admin-chip ok">Duyệt ${approved}</span>
+              <span class="admin-chip pending">Chờ ${pending}</span>
+              ${offCount ? `<span class="admin-chip off">OFF ${offCount}</span>` : ""}
+            `}
           </div>
         </div>
         <div class="admin-events-wrap">${eventsHtml}</div>
@@ -467,34 +789,35 @@ async function loadMonthSummary() {
 async function loadPendingSchedules() {
   const { data, error } = await supabase
     .from("schedule_requests")
-    .select("*, profiles:employee_id(employee_code,full_name,role_type,team)")
+    .select("*, profiles:employee_id(employee_code,full_name,role_type,area,team)")
     .eq("status", "pending")
     .order("work_date", { ascending: true })
     .order("submitted_at", { ascending: true });
 
   const tbody = document.getElementById("pendingScheduleTable");
-
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-row">${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
     return;
   }
 
-  if (!data?.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-row">Không có yêu cầu chờ duyệt.</td></tr>`;
+  const scopedData = (data || []).filter(row => profileMatchesScope(row.profiles));
+  if (!scopedData.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-row">Không có yêu cầu chờ duyệt trong phạm vi đang chọn.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = data.map(row => {
+  tbody.innerHTML = scopedData.map(row => {
     const meta = parseScheduleNote(row.note);
     return `
       <tr>
         <td><input type="checkbox" class="schedule-check" value="${row.id}" /></td>
-        <td><b>${displayProfileName(row.profiles)}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
-        <td>${row.profiles?.role_type || ""}</td>
-        <td>${row.profiles?.team || ""}</td>
+        <td><b>${escapeHtml(displayProfileName(row.profiles))}</b><br><span class="muted">${escapeHtml(row.profiles?.employee_code || "")}</span></td>
+        <td>${escapeHtml(row.profiles?.role_type || "")}</td>
+        <td>${escapeHtml(row.profiles?.area || "")}</td>
+        <td>${escapeHtml(row.profiles?.team || "")}</td>
         <td>${formatDate(row.work_date)}</td>
-        <td>${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? `<br><span class="muted">${meta.timeText}</span>` : ""}</td>
-        <td>${meta.cleanNote || ""}</td>
+        <td>${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? `<br><span class="muted">${escapeHtml(meta.timeText)}</span>` : ""}</td>
+        <td>${escapeHtml(meta.cleanNote || "")}</td>
       </tr>
     `;
   }).join("");
@@ -503,31 +826,33 @@ async function loadPendingSchedules() {
 async function loadPendingLeaves() {
   const { data, error } = await supabase
     .from("leave_requests")
-    .select("*, profiles:employee_id(employee_code,full_name,role_type,team)")
+    .select("*, profiles:employee_id(employee_code,full_name,role_type,area,team)")
     .eq("status", "pending")
     .order("leave_date", { ascending: true });
 
   const tbody = document.getElementById("pendingLeaveTable");
-
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-row">${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
     return;
   }
 
-  if (!data?.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-row">Không có yêu cầu xin nghỉ chờ duyệt.</td></tr>`;
+  const scopedData = (data || []).filter(row => profileMatchesScope(row.profiles));
+  if (!scopedData.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-row">Không có yêu cầu xin nghỉ chờ duyệt trong phạm vi đang chọn.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = data.map(row => `
+  tbody.innerHTML = scopedData.map(row => `
     <tr>
       <td><input type="checkbox" class="leave-check" value="${row.id}" /></td>
-      <td><b>${displayProfileName(row.profiles)}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
+      <td><b>${escapeHtml(displayProfileName(row.profiles))}</b><br><span class="muted">${escapeHtml(row.profiles?.employee_code || "")}</span></td>
+      <td>${escapeHtml(row.profiles?.area || "")}</td>
+      <td>${escapeHtml(row.profiles?.team || "")}</td>
       <td>${formatDate(row.leave_date)}</td>
-      <td>${SHIFT_LABELS[row.shift] || row.shift}</td>
+      <td>${escapeHtml(formatLeavePeriod(row))}</td>
       <td>${REASON_LABELS[row.leave_type] || row.leave_type}</td>
       <td>${row.is_late_notice ? '<span class="badge rejected">Sát giờ</span>' : '<span class="badge approved">Bình thường</span>'}</td>
-      <td>${row.reason_note || ""}</td>
+      <td>${escapeHtml(row.reason_note || "")}</td>
     </tr>
   `).join("");
 }
@@ -539,22 +864,20 @@ async function loadAllSchedules() {
 
   const { data, error } = await supabase
     .from("schedule_requests")
-    .select("*, profiles:employee_id(employee_code,full_name,role_type,team)")
+    .select("*, profiles:employee_id(employee_code,full_name,role_type,area,team)")
     .gte("work_date", start)
     .lte("work_date", end)
     .order("work_date", { ascending: true });
 
   const tbody = document.getElementById("allScheduleTable");
-
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-row">${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-row">${escapeHtml(error.message)}</td></tr>`;
     return;
   }
 
-  allSchedules = data || [];
-
+  allSchedules = (data || []).filter(row => profileMatchesScope(row.profiles));
   if (!allSchedules.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-row">Chưa có lịch trong tuần này.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-row">Chưa có lịch trong tuần và phạm vi đang chọn.</td></tr>`;
     return;
   }
 
@@ -562,11 +885,12 @@ async function loadAllSchedules() {
     const meta = parseScheduleNote(row.note);
     return `
       <tr>
-        <td><b>${displayProfileName(row.profiles)}</b><br><span class="muted">${row.profiles?.employee_code || ""}</span></td>
-        <td>${row.profiles?.role_type || ""}</td>
-        <td>${row.profiles?.team || ""}</td>
+        <td><b>${escapeHtml(displayProfileName(row.profiles))}</b><br><span class="muted">${escapeHtml(row.profiles?.employee_code || "")}</span></td>
+        <td>${escapeHtml(row.profiles?.role_type || "")}</td>
+        <td>${escapeHtml(row.profiles?.area || "")}</td>
+        <td>${escapeHtml(row.profiles?.team || "")}</td>
         <td>${formatDate(row.work_date)}</td>
-        <td>${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? `<br><span class="muted">${meta.timeText}</span>` : ""}</td>
+        <td>${SHIFT_LABELS[row.shift] || row.shift}${meta.timeText ? `<br><span class="muted">${escapeHtml(meta.timeText)}</span>` : ""}</td>
         <td><span class="badge ${row.status}">${STATUS_LABELS[row.status] || row.status}</span></td>
       </tr>
     `;
@@ -773,7 +1097,7 @@ async function confirmDeleteAllSchedules() {
   const notifications = (employees || []).map(employee => ({
     recipient_id: employee.id,
     title: "Lịch làm đã được reset",
-    message: "Admin đã xóa toàn bộ lịch làm và các ngày OFF đã nộp. Vui lòng tạo lại bản nháp và nộp lịch tháng mới.",
+    message: "Admin đã xóa toàn bộ lịch làm và các ngày OFF đã nộp. Vui lòng tạo lại bản nháp và nộp lịch tuần mới.",
     type: "warn",
     created_by: currentUser.id,
     created_at: now
@@ -847,17 +1171,481 @@ async function confirmDeleteAllSchedules() {
 }
 
 
+function monthValueFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getMonthRange(monthValue) {
+  const [year, month] = String(monthValue || "").split("-").map(Number);
+  const safeDate = Number.isInteger(year) && Number.isInteger(month)
+    ? new Date(year, month - 1, 1)
+    : new Date(selectedAdminMonth);
+  const start = new Date(safeDate.getFullYear(), safeDate.getMonth(), 1);
+  const end = new Date(safeDate.getFullYear(), safeDate.getMonth() + 1, 0);
+  return { start, end, startIso: toISODate(start), endIso: toISODate(end) };
+}
+
+function weekdayLabel(dateIso) {
+  const day = new Date(`${dateIso}T00:00:00`).getDay();
+  return ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"][day];
+}
+
+function normalizeExportTeam(value) {
+  return normalizeScopeValue(value);
+}
+
+function rebuildExcelTeamOptions({ preserve = true } = {}) {
+  if (!excelExportTeam) return;
+  const selectedArea = isLeader()
+    ? String(currentProfile?.area || "").trim()
+    : String(excelExportArea?.value || "").trim();
+  const previous = preserve ? String(excelExportTeam.value || "").trim() : "";
+  const teams = uniqueSorted(scopeProfilesCache
+    .filter(profile => profile.status === "active")
+    .filter(profile => !selectedArea || normalizeScopeValue(profile.area) === normalizeScopeValue(selectedArea))
+    .map(profile => profile.team));
+
+  if (isLeader()) {
+    const ownTeam = String(currentProfile?.team || "").trim();
+    setSelectOptions(excelExportTeam, teams, ownTeam ? "Team của Leader" : "Chưa cấu hình team", ownTeam, true);
+  } else {
+    const canKeep = teams.some(team => normalizeScopeValue(team) === normalizeScopeValue(previous));
+    setSelectOptions(excelExportTeam, teams, "Tất cả team", canKeep ? previous : "", false);
+  }
+}
+
+function updateExcelScopeNote() {
+  if (!excelExportScopeNote) return;
+  const area = isLeader() ? String(currentProfile?.area || "").trim() : String(excelExportArea?.value || "").trim();
+  const team = isLeader() ? String(currentProfile?.team || "").trim() : String(excelExportTeam?.value || "").trim();
+  if (isLeader()) {
+    excelExportScopeNote.textContent = area && team
+      ? `Leader chỉ xuất bảng chấm công của Khu vực ${area} • Team ${team}.`
+      : "Leader chưa được cấu hình đủ Khu vực và Team; vui lòng liên hệ SUPER_ADMIN.";
+  } else {
+    const parts = [area ? `Khu vực ${area}` : "Tất cả khu vực", team ? `Team ${team}` : "Tất cả team"];
+    excelExportScopeNote.textContent = `Phạm vi xuất: ${parts.join(" • ")}.`;
+  }
+}
+
+async function populateExcelScopeOptions() {
+  if (!scopeProfilesCache.length) await loadScopeProfiles();
+  const areas = uniqueSorted(scopeProfilesCache.filter(profile => profile.status === "active").map(profile => profile.area));
+  if (isLeader()) {
+    const ownArea = String(currentProfile?.area || "").trim();
+    setSelectOptions(excelExportArea, areas, ownArea ? "Khu vực của Leader" : "Chưa cấu hình khu vực", ownArea, true);
+  } else {
+    const previousArea = String(excelExportArea?.value || "").trim();
+    const canKeepArea = areas.some(area => normalizeScopeValue(area) === normalizeScopeValue(previousArea));
+    setSelectOptions(excelExportArea, areas, "Tất cả khu vực", canKeepArea ? previousArea : "", false);
+  }
+  rebuildExcelTeamOptions({ preserve: true });
+  updateExcelScopeNote();
+}
+
+async function openExcelExportModal() {
+  if (excelExportMonth) excelExportMonth.value = monthValueFromDate(selectedAdminMonth);
+  if (excelExportStatus) excelExportStatus.value = "approved";
+  showMessage(excelExportMessage, "");
+  await populateExcelScopeOptions();
+  excelExportModal?.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeExcelExportModal() {
+  excelExportModal?.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+  showMessage(excelExportMessage, "");
+}
+
+function setExcelExportBusy(isBusy) {
+  if (!downloadExcelBtn) return;
+  downloadExcelBtn.disabled = isBusy;
+  downloadExcelBtn.textContent = isBusy ? "Đang tạo bảng chấm công..." : "Tải bảng chấm công tháng";
+}
+
+function autoFitWorksheet(ws, rows, maxWidth = 34, headerRow = 1) {
+  const widths = [];
+  rows.forEach(row => row.forEach((value, index) => {
+    const textLength = String(value ?? "").length;
+    widths[index] = Math.max(widths[index] || 8, Math.min(maxWidth, textLength + 2));
+  }));
+  ws["!cols"] = widths.map(wch => ({ wch }));
+  if (rows.length) {
+    ws["!autofilter"] = {
+      ref: `A${headerRow}:${window.XLSX.utils.encode_col((rows[headerRow - 1]?.length || 1) - 1)}${rows.length}`
+    };
+  }
+  ws["!freeze"] = { xSplit: 0, ySplit: headerRow };
+}
+
+function attendanceShiftCode(shift) {
+  if (shift === "full_day") return "X";
+  if (shift === "morning") return "S";
+  if (shift === "afternoon") return "CH";
+  return shift ? String(shift).toUpperCase() : "";
+}
+
+function attendanceShiftCredit(shift) {
+  if (shift === "full_day") return 1;
+  if (shift === "morning" || shift === "afternoon") return 0.5;
+  return 0;
+}
+
+function parseClockMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function approvedLeaveHours(row) {
+  if (row?.status !== "approved") return 0;
+  const start = parseClockMinutes(row.leave_start_time);
+  const end = parseClockMinutes(row.leave_end_time);
+  if (start === null || end === null || end <= start) return 0;
+  return Math.round(((end - start) / 60) * 100) / 100;
+}
+
+function approvedLeaveCredit(row, plannedCredit) {
+  if (row?.status !== "approved") return 0;
+  const period = row.leave_period || "full_shift";
+  if (period === "full_shift") return plannedCredit > 0 ? plannedCredit : 1;
+  if (period === "first_half" || period === "last_half") {
+    return Math.min(plannedCredit > 0 ? plannedCredit : 0.5, 0.5);
+  }
+  return 0;
+}
+
+function leaveAttendanceLabel(row) {
+  const pendingSuffix = row.status === "pending" ? "?" : "";
+  const period = row.leave_period || "full_shift";
+  if (period === "first_half") return `NĐ${pendingSuffix}`;
+  if (period === "last_half") return `NC${pendingSuffix}`;
+  if (period === "custom") {
+    const start = normalizeTime(row.leave_start_time);
+    const end = normalizeTime(row.leave_end_time);
+    return `N ${start}${start && end ? "-" : ""}${end}${pendingSuffix}`.trim();
+  }
+  return `N${pendingSuffix}`;
+}
+
+function shortWeekdayLabel(dateIso) {
+  const day = new Date(`${dateIso}T00:00:00`).getDay();
+  return ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][day];
+}
+
+function excelSafeName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "tat-ca-team";
+}
+
+function makeAttendanceWorksheet({ profiles, schedules, offs, leaves, busyRows, monthValue, selectedArea, selectedTeam }) {
+  const [year, month] = monthValue.split("-").map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const profileMap = new Map(profiles.map(profile => [profile.id, profile]));
+
+  const schedulesByEmployeeDate = new Map();
+  schedules.forEach(row => {
+    const key = `${row.employee_id}|${row.work_date}`;
+    if (!schedulesByEmployeeDate.has(key)) schedulesByEmployeeDate.set(key, []);
+    schedulesByEmployeeDate.get(key).push(row);
+  });
+  const offsByEmployeeDate = new Map();
+  offs.forEach(row => offsByEmployeeDate.set(`${row.employee_id}|${row.unavailable_date}`, row));
+  const leavesByEmployeeDate = new Map();
+  leaves.forEach(row => {
+    const key = `${row.employee_id}|${row.leave_date}`;
+    if (!leavesByEmployeeDate.has(key)) leavesByEmployeeDate.set(key, []);
+    leavesByEmployeeDate.get(key).push(row);
+  });
+  const busyByEmployeeDate = new Map();
+  busyRows.forEach(row => {
+    const key = `${row.employee_id}|${row.unavailable_date}`;
+    if (!busyByEmployeeDate.has(key)) busyByEmployeeDate.set(key, []);
+    busyByEmployeeDate.get(key).push(row);
+  });
+
+  const staticHeaders = ["STT", "Mã NV", "Họ tên", "Vai trò", "Khu vực", "Team"];
+  const dayHeaders = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
+    const dateIso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return `${String(day).padStart(2, "0")}-${shortWeekdayLabel(dateIso)}`;
+  });
+  const totalHeaders = ["Công lịch", "Nghỉ quy đổi", "Giờ nghỉ", "Công dự kiến", "OFF", "Lịch bận", "Chờ duyệt"];
+  const headers = [...staticHeaders, ...dayHeaders, ...totalHeaders];
+
+  const title = `BẢNG CHẤM CÔNG THÁNG ${String(month).padStart(2, "0")}/${year}`;
+  const scopeParts = [];
+  if (selectedArea) scopeParts.push(`Khu vực: ${selectedArea}`);
+  if (selectedTeam) scopeParts.push(`Team: ${selectedTeam}`);
+  const scopeText = scopeParts.length ? scopeParts.join(" • ") : "Phạm vi: Tất cả khu vực và team";
+  const legend = "Ký hiệu: X=Cả ngày | S=Buổi sáng | CH=Buổi chiều | OFF=Nghỉ | N=Nghỉ cả ca | NĐ=Nghỉ nửa đầu | NC=Nghỉ nửa cuối | ?=Chờ duyệt | CN=Chủ Nhật";
+  const rows = [[title], [scopeText], [legend], [], headers];
+  const summaryRows = [["STT", "Mã NV", "Họ tên", "Vai trò", "Khu vực", "Team", "Công lịch", "Nghỉ quy đổi", "Giờ nghỉ", "Công dự kiến", "Ngày OFF", "Lịch bận", "Lịch chờ", "Đơn nghỉ chờ"]];
+
+  profiles.slice().sort((a, b) => displayProfileName(a).localeCompare(displayProfileName(b), "vi")).forEach((profile, profileIndex) => {
+    let plannedCredit = 0;
+    let leaveCredit = 0;
+    let leaveHours = 0;
+    let offCount = 0;
+    let busyCount = 0;
+    let pendingScheduleCount = 0;
+    let pendingLeaveCount = 0;
+    const dayCells = [];
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const dateIso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const isSunday = new Date(`${dateIso}T00:00:00`).getDay() === 0;
+      const key = `${profile.id}|${dateIso}`;
+      const daySchedules = schedulesByEmployeeDate.get(key) || [];
+      const approvedSchedules = daySchedules.filter(row => row.status === "approved");
+      const pendingSchedules = daySchedules.filter(row => row.status === "pending");
+      const offRow = offsByEmployeeDate.get(key) || null;
+      const dayLeaves = leavesByEmployeeDate.get(key) || [];
+      const approvedLeaves = dayLeaves.filter(row => row.status === "approved");
+      const pendingLeaves = dayLeaves.filter(row => row.status === "pending");
+      const dayBusy = busyByEmployeeDate.get(key) || [];
+
+      if (isSunday) {
+        dayCells.push("CN");
+        continue;
+      }
+
+      let dayPlanned = approvedSchedules.reduce((sum, row) => sum + attendanceShiftCredit(row.shift), 0);
+      dayPlanned = Math.min(dayPlanned, 1);
+      if (!offRow) plannedCredit += dayPlanned;
+      pendingScheduleCount += pendingSchedules.length;
+      pendingLeaveCount += pendingLeaves.length;
+
+      let dayLeaveCredit = 0;
+      approvedLeaves.forEach(row => {
+        dayLeaveCredit += approvedLeaveCredit(row, offRow ? 0 : dayPlanned);
+        leaveHours += approvedLeaveHours(row);
+      });
+      dayLeaveCredit = Math.min(dayLeaveCredit, offRow ? 0 : (dayPlanned > 0 ? dayPlanned : 1));
+      leaveCredit += dayLeaveCredit;
+      if (offRow) offCount += 1;
+      if (dayBusy.length) busyCount += 1;
+
+      const approvedCode = approvedSchedules.map(row => attendanceShiftCode(row.shift)).filter(Boolean).join("+");
+      const pendingCode = pendingSchedules.map(row => `${attendanceShiftCode(row.shift)}?`).filter(Boolean).join("+");
+      const leaveCode = approvedLeaves.map(leaveAttendanceLabel).filter(Boolean).join("+");
+      const pendingLeaveCode = pendingLeaves.map(leaveAttendanceLabel).filter(Boolean).join("+");
+      const parts = [];
+      if (offRow) {
+        const conflictCode = [approvedCode, pendingCode].filter(Boolean).join("+");
+        parts.push(conflictCode ? `OFF/${conflictCode}!` : "OFF");
+      } else {
+        if (approvedCode) parts.push(approvedCode);
+        if (pendingCode) parts.push(pendingCode);
+        if (leaveCode) parts.push(leaveCode);
+        if (pendingLeaveCode) parts.push(pendingLeaveCode);
+        if (!parts.length && dayBusy.length) {
+          const busyLabels = [...new Set(dayBusy.map(row => row.shift === "morning" ? "B:S" : row.shift === "afternoon" ? "B:CH" : "B"))];
+          parts.push(busyLabels.join("+"));
+        }
+      }
+      dayCells.push(parts.join("/") || "");
+    }
+
+    const expectedCredit = Math.max(0, Math.round((plannedCredit - leaveCredit) * 100) / 100);
+    rows.push([
+      profileIndex + 1, profile.employee_code || "", displayProfileName(profile), profile.role_type || "", profile.area || "", profile.team || "",
+      ...dayCells,
+      Math.round(plannedCredit * 100) / 100, Math.round(leaveCredit * 100) / 100, Math.round(leaveHours * 100) / 100,
+      expectedCredit, offCount, busyCount, pendingScheduleCount + pendingLeaveCount
+    ]);
+    summaryRows.push([
+      profileIndex + 1, profile.employee_code || "", displayProfileName(profile), profile.role_type || "", profile.area || "", profile.team || "",
+      Math.round(plannedCredit * 100) / 100, Math.round(leaveCredit * 100) / 100, Math.round(leaveHours * 100) / 100,
+      expectedCredit, offCount, busyCount, pendingScheduleCount, pendingLeaveCount
+    ]);
+  });
+
+  const ws = window.XLSX.utils.aoa_to_sheet(rows);
+  const lastCol = window.XLSX.utils.encode_col(headers.length - 1);
+  const lastRow = rows.length;
+  ws["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: headers.length - 1 } }
+  ];
+  ws["!autofilter"] = { ref: `A5:${lastCol}${lastRow}` };
+  ws["!freeze"] = { xSplit: 6, ySplit: 5 };
+  ws["!cols"] = [
+    { wch: 5 }, { wch: 17 }, { wch: 25 }, { wch: 13 }, { wch: 20 }, { wch: 15 },
+    ...Array.from({ length: daysInMonth }, () => ({ wch: 7 })),
+    { wch: 11 }, { wch: 13 }, { wch: 10 }, { wch: 13 }, { wch: 8 }, { wch: 10 }, { wch: 10 }
+  ];
+  ws["!rows"] = [{ hpt: 24 }, { hpt: 20 }, { hpt: 34 }, { hpt: 8 }, { hpt: 30 }];
+
+  const wsSummary = window.XLSX.utils.aoa_to_sheet(summaryRows);
+  autoFitWorksheet(wsSummary, summaryRows, 26, 1);
+  return { ws, wsSummary, profileMap };
+}
+
+async function loadLeaveRowsForExport(startIso, endIso, includeAllStatuses) {
+  const statuses = includeAllStatuses ? ["approved", "pending"] : ["approved"];
+  let result = await supabase
+    .from("leave_requests")
+    .select("id, employee_id, leave_date, shift, leave_type, leave_period, leave_start_time, leave_end_time, status, reason_note")
+    .gte("leave_date", startIso)
+    .lte("leave_date", endIso)
+    .in("status", statuses)
+    .order("leave_date", { ascending: true });
+
+  if (result.error && /leave_period|leave_start_time|leave_end_time|column/i.test(result.error.message || "")) {
+    const fallback = await supabase
+      .from("leave_requests")
+      .select("id, employee_id, leave_date, shift, leave_type, status, reason_note")
+      .gte("leave_date", startIso)
+      .lte("leave_date", endIso)
+      .in("status", statuses)
+      .order("leave_date", { ascending: true });
+    return {
+      data: (fallback.data || []).map(row => ({
+        ...row,
+        leave_period: "full_shift",
+        leave_start_time: null,
+        leave_end_time: null
+      })),
+      error: fallback.error,
+      compatibilityMode: !fallback.error
+    };
+  }
+  return { ...result, compatibilityMode: false };
+}
+
+async function downloadMonthlyExcel() {
+  if (!window.XLSX) {
+    showMessage(excelExportMessage, "Thư viện Excel chưa tải được. Hãy kiểm tra mạng rồi tải lại trang.", "err");
+    return;
+  }
+
+  const monthValue = excelExportMonth?.value;
+  if (!monthValue) {
+    showMessage(excelExportMessage, "Vui lòng chọn tháng chấm công.", "err");
+    return;
+  }
+
+  const selectedArea = isLeader() ? String(currentProfile?.area || "").trim() : String(excelExportArea?.value || "").trim();
+  const selectedTeam = isLeader() ? String(currentProfile?.team || "").trim() : String(excelExportTeam?.value || "").trim();
+  if (isLeader() && (!selectedArea || !selectedTeam)) {
+    showMessage(excelExportMessage, "Hồ sơ Leader chưa có đủ Khu vực và Team. SUPER_ADMIN cần cập nhật hồ sơ trước khi xuất chấm công.", "err");
+    return;
+  }
+
+  const { startIso, endIso } = getMonthRange(monthValue);
+  const includeAllStatuses = excelExportStatus?.value === "all";
+  setExcelExportBusy(true);
+  showMessage(excelExportMessage, "Đang tổng hợp bảng chấm công theo từng ngày trong tháng...");
+
+  try {
+    const [profileRes, scheduleRes, unavailableRes, leaveRes] = await Promise.all([
+      supabase.from("profiles").select("id, employee_code, full_name, role_type, area, team, email, status").eq("status", "active").order("full_name", { ascending: true }),
+      supabase.from("schedule_requests").select("id, employee_id, work_date, shift, status, note, submitted_at").gte("work_date", startIso).lte("work_date", endIso).in("status", includeAllStatuses ? ["approved", "pending"] : ["approved"]).order("work_date", { ascending: true }),
+      supabase.from("unavailability").select("id, employee_id, unavailable_date, shift, status, note, created_at").gte("unavailable_date", startIso).lte("unavailable_date", endIso).eq("status", "active").order("unavailable_date", { ascending: true }),
+      loadLeaveRowsForExport(startIso, endIso, includeAllStatuses)
+    ]);
+
+    const firstError = profileRes.error || scheduleRes.error || unavailableRes.error || leaveRes.error;
+    if (firstError) throw firstError;
+
+    const matches = profile => (!selectedArea || normalizeScopeValue(profile.area) === normalizeScopeValue(selectedArea))
+      && (!selectedTeam || normalizeScopeValue(profile.team) === normalizeScopeValue(selectedTeam));
+    const profiles = (profileRes.data || []).filter(matches);
+    const allowedIds = new Set(profiles.map(profile => profile.id));
+    const schedules = (scheduleRes.data || []).filter(row => allowedIds.has(row.employee_id));
+    const unavailability = (unavailableRes.data || []).filter(row => allowedIds.has(row.employee_id));
+    const offs = unavailability.filter(row => String(row.note || "").includes(OFF_SUBMITTED_MARKER));
+    const busyRows = unavailability.filter(row => !String(row.note || "").includes(OFF_SUBMITTED_MARKER));
+    const leaves = (leaveRes.data || []).filter(row => allowedIds.has(row.employee_id));
+
+    const { ws: wsAttendance, wsSummary, profileMap } = makeAttendanceWorksheet({
+      profiles, schedules, offs, leaves, busyRows, monthValue, selectedArea, selectedTeam
+    });
+
+    const scheduleRows = [["STT", "Mã NV", "Họ tên", "Vai trò", "Khu vực", "Team", "Ngày", "Thứ", "Ca làm", "Khung giờ", "Trạng thái", "Ghi chú"]];
+    schedules.forEach((row, index) => {
+      const profile = profileMap.get(row.employee_id) || {};
+      const meta = parseScheduleNote(row.note);
+      scheduleRows.push([index + 1, profile.employee_code || "", displayProfileName(profile), profile.role_type || "", profile.area || "", profile.team || "", row.work_date, weekdayLabel(row.work_date), SHIFT_LABELS[row.shift] || row.shift, meta.timeText || "", STATUS_LABELS[row.status] || row.status, meta.cleanNote || ""]);
+    });
+
+    const offRows = [["STT", "Mã NV", "Họ tên", "Vai trò", "Khu vực", "Team", "Ngày OFF", "Thứ", "Ca", "Ghi chú"]];
+    offs.forEach((row, index) => {
+      const profile = profileMap.get(row.employee_id) || {};
+      offRows.push([index + 1, profile.employee_code || "", displayProfileName(profile), profile.role_type || "", profile.area || "", profile.team || "", row.unavailable_date, weekdayLabel(row.unavailable_date), SHIFT_LABELS[row.shift] || row.shift || "OFF", String(row.note || "").replace(OFF_SUBMITTED_MARKER, "").trim()]);
+    });
+
+    const busyExportRows = [["STT", "Mã NV", "Họ tên", "Vai trò", "Khu vực", "Team", "Ngày bận", "Thứ", "Ca bận", "Lý do/Ghi chú"]];
+    busyRows.forEach((row, index) => {
+      const profile = profileMap.get(row.employee_id) || {};
+      busyExportRows.push([index + 1, profile.employee_code || "", displayProfileName(profile), profile.role_type || "", profile.area || "", profile.team || "", row.unavailable_date, weekdayLabel(row.unavailable_date), SHIFT_LABELS[row.shift] || row.shift || "Bận", String(row.note || "").trim()]);
+    });
+
+    const leaveRows = [["STT", "Mã NV", "Họ tên", "Vai trò", "Khu vực", "Team", "Ngày nghỉ", "Thứ", "Hình thức", "Khung giờ", "Lý do", "Trạng thái", "Ghi chú"]];
+    leaves.forEach((row, index) => {
+      const profile = profileMap.get(row.employee_id) || {};
+      const timeText = row.leave_start_time && row.leave_end_time ? `${String(row.leave_start_time).slice(0, 5)} - ${String(row.leave_end_time).slice(0, 5)}` : "";
+      leaveRows.push([index + 1, profile.employee_code || "", displayProfileName(profile), profile.role_type || "", profile.area || "", profile.team || "", row.leave_date, weekdayLabel(row.leave_date), LEAVE_PERIOD_LABELS[row.leave_period] || row.leave_period || "Toàn bộ ca", timeText, REASON_LABELS[row.leave_type] || row.leave_type || "", STATUS_LABELS[row.status] || row.status, row.reason_note || ""]);
+    });
+
+    const wb = window.XLSX.utils.book_new();
+    const scopeSubject = [selectedArea ? `Khu vực ${selectedArea}` : "Tất cả khu vực", selectedTeam ? `Team ${selectedTeam}` : "Tất cả team"].join(" • ");
+    wb.Props = { Title: `Bảng chấm công tháng ${monthValue}`, Subject: scopeSubject, Author: "Unite Work Schedule", CreatedDate: new Date() };
+
+    const wsSchedules = window.XLSX.utils.aoa_to_sheet(scheduleRows);
+    const wsOff = window.XLSX.utils.aoa_to_sheet(offRows);
+    const wsBusy = window.XLSX.utils.aoa_to_sheet(busyExportRows);
+    const wsLeaves = window.XLSX.utils.aoa_to_sheet(leaveRows);
+    autoFitWorksheet(wsSchedules, scheduleRows, 34, 1);
+    autoFitWorksheet(wsOff, offRows, 34, 1);
+    autoFitWorksheet(wsBusy, busyExportRows, 34, 1);
+    autoFitWorksheet(wsLeaves, leaveRows, 34, 1);
+
+    window.XLSX.utils.book_append_sheet(wb, wsAttendance, "Bang cham cong");
+    window.XLSX.utils.book_append_sheet(wb, wsSummary, "Tong hop thang");
+    window.XLSX.utils.book_append_sheet(wb, wsSchedules, "Lich lam");
+    window.XLSX.utils.book_append_sheet(wb, wsOff, "Ngay OFF");
+    window.XLSX.utils.book_append_sheet(wb, wsBusy, "Lich ban");
+    window.XLSX.utils.book_append_sheet(wb, wsLeaves, "Xin nghi");
+
+    const filename = `bang-cham-cong-${monthValue}-${excelSafeName(selectedArea || "tat-ca-khu-vuc")}-${excelSafeName(selectedTeam || "tat-ca-team")}.xlsx`;
+    window.XLSX.writeFile(wb, filename, { compression: true });
+    const compatText = leaveRes.compatibilityMode ? " Dữ liệu nghỉ cũ được quy đổi về nghỉ toàn ca vì database chưa có các cột nghỉ linh hoạt." : "";
+    showMessage(excelExportMessage, `Đã tải ${filename}: ${profiles.length} nhân sự, ${schedules.length} lịch làm, ${offs.length} OFF, ${leaves.length} đơn nghỉ.${compatText}`, "ok");
+  } catch (error) {
+    const migrationHint = /profiles\.area|column area|area does not exist/i.test(error.message || "")
+      ? " Hãy chạy migration 003_area_scope_and_export_fix.sql trước."
+      : "";
+    showMessage(excelExportMessage, `Không thể tạo bảng chấm công: ${error.message || error}.${migrationHint}`, "err");
+  } finally {
+    setExcelExportBusy(false);
+  }
+}
+
+
 function exportCsv() {
   if (!allSchedules.length) {
     alert("Chưa có dữ liệu để xuất.");
     return;
   }
 
-  const headers = ["Mã NV","Họ tên","Loại","Team","Ngày","Ca","Trạng thái"];
+  const headers = ["Mã NV","Họ tên","Loại","Khu vực","Team","Ngày","Ca","Trạng thái"];
   const rows = allSchedules.map(row => [
     row.profiles?.employee_code || "",
     row.profiles?.full_name || "",
     row.profiles?.role_type || "",
+    row.profiles?.area || "",
     row.profiles?.team || "",
     row.work_date,
     requireShiftLabel(row),
@@ -925,11 +1713,14 @@ function openAdminDayDetailModal(dateIso) {
   const approved = rows.filter(row => row.status === "approved").length;
   const pending = rows.filter(row => row.status === "pending").length;
   const offCount = rows.filter(row => row.status === "off").length;
+  const weeklyOff = new Date(`${dateIso}T00:00:00`).getDay() === 0;
 
   modal.querySelector("#adminDayDetailTitle").textContent = formatDate(dateIso);
-  modal.querySelector("#adminDayDetailSub").textContent = rows.length
-    ? `${rows.length} lựa chọn lịch trong ngày này.`
-    : "Ngày này chưa có lịch đăng ký.";
+  modal.querySelector("#adminDayDetailSub").textContent = weeklyOff
+    ? (rows.length
+      ? `Chủ Nhật là ngày nghỉ hàng tuần. Có ${rows.length} dữ liệu cũ trong ngày này cần kiểm tra.`
+      : "Chủ Nhật là ngày nghỉ hàng tuần.")
+    : (rows.length ? `${rows.length} lựa chọn lịch trong ngày này.` : "Ngày này chưa có lịch đăng ký.");
 
   const eventsHtml = rows.length
     ? rows.map(row => {
@@ -938,11 +1729,11 @@ function openAdminDayDetailModal(dateIso) {
         const statusText = row.status === "off" ? "OFF đã chốt" : (STATUS_LABELS[row.status] || row.status);
         return `
           <div class="liquid-event ${row.status}">
-            <strong>${displayProfileName(profile)}</strong>
-            <small>${profile.role_type || ""}${profile.team ? ` • ${profile.team}` : ""}</small><br>
-            <small><span class="detail-label">Lịch</span>${requireShiftLabel(row)}</small><br>
+            <strong>${escapeHtml(displayProfileName(profile))}</strong>
+            <small>${escapeHtml(profile.role_type || "")}${profile.area ? ` • ${escapeHtml(profile.area)}` : ""}${profile.team ? ` • ${escapeHtml(profile.team)}` : ""}</small><br>
+            <small><span class="detail-label">Lịch</span>${escapeHtml(requireShiftLabel(row))}</small><br>
             <small><span class="detail-label">Trạng thái</span>${statusText}</small>
-            ${meta.cleanNote ? `<p class="liquid-muted">${meta.cleanNote}</p>` : ""}
+            ${meta.cleanNote ? `<p class="liquid-muted">${escapeHtml(meta.cleanNote)}</p>` : ""}
           </div>
         `;
       }).join("")
@@ -962,12 +1753,9 @@ function openAdminDayDetailModal(dateIso) {
 }
 
 async function refreshAll() {
-  await loadMetrics();
+  await loadScopeProfiles();
   await loadProfileSettings();
-  await loadMonthSummary();
-  await loadPendingSchedules();
-  await loadPendingLeaves();
-  await loadAllSchedules();
+  await refreshOperationalData();
 }
 
 document.getElementById("logoutBtn")?.addEventListener("click", logout);
@@ -989,8 +1777,33 @@ document.getElementById("confirmDeleteAllScheduleBtn")?.addEventListener("click"
 document.querySelectorAll("[data-close-delete-modal]").forEach(el => {
   el.addEventListener("click", closeDeleteScheduleModal);
 });
+document.getElementById("openProfileManagerBtn")?.addEventListener("click", openProfileManager);
 document.getElementById("refreshProfilesBtn")?.addEventListener("click", loadProfileSettings);
-document.getElementById("createAccountBtn")?.addEventListener("click", createAccount);
+document.getElementById("refreshProfilesModalBtn")?.addEventListener("click", loadProfileSettings);
+profileSearchInput?.addEventListener("input", event => renderProfileSettings(event.target.value));
+document.getElementById("profileSearchBtn")?.addEventListener("click", () => renderProfileSettings(profileSearchInput?.value || ""));
+profileSearchInput?.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    renderProfileSettings(profileSearchInput.value);
+  }
+});
+document.querySelectorAll("[data-close-profile-manager]").forEach(el => el.addEventListener("click", closeProfileManager));
+document.getElementById("openExcelExportBtn")?.addEventListener("click", openExcelExportModal);
+downloadExcelBtn?.addEventListener("click", downloadMonthlyExcel);
+excelExportArea?.addEventListener("change", () => { rebuildExcelTeamOptions({ preserve: false }); updateExcelScopeNote(); });
+excelExportTeam?.addEventListener("change", updateExcelScopeNote);
+document.querySelectorAll("[data-close-excel-export]").forEach(el => el.addEventListener("click", closeExcelExportModal));
+adminAreaFilter?.addEventListener("change", async () => {
+  rebuildAdminTeamFilter({ preserve: false });
+  updateAdminScopeNote();
+  await refreshOperationalData();
+});
+adminTeamFilter?.addEventListener("change", async () => {
+  updateAdminScopeNote();
+  await refreshOperationalData();
+});
+createAccountBtn?.addEventListener("click", createAccount);
 document.getElementById("clearAccountFormBtn")?.addEventListener("click", clearAccountForm);
 profileSettingsTable?.addEventListener("click", event => {
   const btn = event.target.closest(".profile-save-btn");
@@ -1031,6 +1844,8 @@ document.addEventListener("keydown", event => {
     closeDeleteScheduleModal();
     closeChangePasswordModal();
     closeAdminDayDetailModal();
+    closeProfileManager();
+    closeExcelExportModal();
   }
 });
 
@@ -1064,4 +1879,6 @@ adminMonthSummary?.addEventListener("touchmove", () => {
 
   weekStartInput.value = toISODate(selectedWeekStart);
   await refreshAll();
+  await checkCreateUserFunctionAvailability();
+})();
 })();

@@ -1,27 +1,16 @@
-# Unite Work Schedule v15 — Monthly Draft Workflow
+# Unite Work Schedule V24
 
-## Luồng đăng ký mới
+Bản tinh chỉnh giao diện khối Tổng quan theo tháng.
 
-1. Nhân viên bấm vào ngày trên lịch.
-2. Chọn một trong bốn lựa chọn:
-   - Cả ngày
-   - Buổi sáng
-   - Buổi chiều
-   - OFF
-3. Lựa chọn được lưu vào **bản nháp tháng**, chưa gửi lên admin.
-4. Nhân viên có thể sửa hoặc xóa từng ngày trong phần **Xem lại trước khi nộp**.
-5. Khi hoàn tất, bấm **Nộp lịch tháng**.
-6. Ngày làm được gửi sang trạng thái **Chờ duyệt**; ngày OFF được chốt và hiển thị trên lịch admin.
-7. Sau khi lịch làm đã được nộp và duyệt, muốn nghỉ phải gửi yêu cầu xin nghỉ.
+## Thay đổi V24
 
-## Thông báo
+- Thêm scope `admin-month-overview` riêng cho khối tổng quan tháng.
+- Giữ một tiêu đề lớn duy nhất: **Tổng quan lịch làm**.
+- Chuyển tháng đang xem thành chip nhỏ: **Đang xem Tháng M/YYYY**.
+- Căn chip cùng hàng với tiêu đề và cân đối với toolbar.
+- Tối ưu responsive cho tablet và điện thoại.
+- Không thay đổi database, phân quyền hoặc logic xuất Excel.
 
-- Lưu/sửa/xóa bản nháp: thông báo nhanh trên màn hình.
-- Nộp lịch tháng thành công: lưu vào trung tâm Thông báo.
-- Admin vẫn thấy tên nhân sự, ca làm và OFF trong lịch tháng.
+## Cập nhật nhanh
 
-## Lưu ý
-
-- Bản nháp được lưu trong trình duyệt hiện tại bằng localStorage. Nếu đổi máy hoặc xóa dữ liệu trình duyệt trước khi nộp, bản nháp chưa nộp sẽ không đi theo.
-- Không cần chạy thêm SQL cho bản v15 nếu database của các bản trước đã hoạt động.
-- Copy đè toàn bộ thư mục lên source hiện tại và reload mạnh bằng Ctrl + Shift + R.
+Thay 3 file: `admin.html`, `css/app.css`, `js/admin.js`, sau đó tải lại trang bằng `Ctrl + Shift + R`.

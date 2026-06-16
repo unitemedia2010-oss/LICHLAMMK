@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Unite Work Schedule | Admin</title>
-  <link rel="stylesheet" href="./css/app.css?v=20" />
+  <link rel="stylesheet" href="./css/app.css?v=24" />
 </head>
 <body>
   <header class="topbar admin">
@@ -40,7 +40,7 @@
         <div>
           <p class="eyebrow">SUPER ADMIN</p>
           <h2>Quản trị tài khoản</h2>
-          <p class="muted">Chỉ SUPER_ADMIN được tạo tài khoản, sửa vai trò, team, chỉ tiêu tháng và khóa/mở hồ sơ. Leader không thấy mục này.</p>
+          <p class="muted">Chỉ SUPER_ADMIN được tạo tài khoản, sửa vai trò, khu vực, team, chỉ tiêu tháng và khóa/mở hồ sơ. Leader không thấy mục này.</p>
         </div>
         <button id="refreshProfilesBtn" class="btn ghost" type="button">Làm mới tài khoản</button>
       </div>
@@ -69,6 +69,7 @@
               <option value="SUPER_ADMIN">SUPER_ADMIN</option>
             </select>
           </label>
+          <label>Khu vực / Chi nhánh / Phòng ban <input id="newAccountArea" type="text" placeholder="VD: Quận 5 / Khối vận hành" /></label>
           <label>Team <input id="newAccountTeam" type="text" placeholder="VD: UNITE" value="UNITE" /></label>
           <label>Chỉ tiêu tháng <input id="newAccountTarget" type="number" min="0" max="31" value="12" /></label>
           <label>
@@ -86,49 +87,48 @@
         <p id="createAccountMessage" class="message" aria-live="polite"></p>
       </div>
 
-      <div class="section-head compact-head account-table-head">
+      <div class="profile-manager-launcher">
         <div>
           <p class="eyebrow">Danh sách tài khoản</p>
-          <h3>Cấu hình hồ sơ & chỉ tiêu</h3>
+          <h3>Hồ sơ, vai trò & chỉ tiêu</h3>
+          <p class="muted">Danh sách được chuyển vào cửa sổ riêng để trang quản trị gọn hơn.</p>
         </div>
+        <button id="openProfileManagerBtn" class="btn secondary" type="button">Mở quản lý hồ sơ</button>
       </div>
-
-      <div class="table-wrap profile-settings-wrap">
-        <table class="profile-settings-table">
-          <thead>
-            <tr>
-              <th>Mã</th>
-              <th>Họ tên hiển thị</th>
-              <th>Email</th>
-              <th>Vai trò</th>
-              <th>Team</th>
-              <th>Chỉ tiêu tháng</th>
-              <th>Trạng thái</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="profileSettingsTable"></tbody>
-        </table>
-      </div>
-      <p id="profileSettingsMessage" class="message" aria-live="polite"></p>
     </section>
 
 
 
 
-    <section class="panel admin-month-panel">
-      <div class="section-head">
-        <div>
+    <section class="panel admin-month-overview">
+      <div class="section-head admin-month-overview-head">
+        <div class="admin-month-overview-copy">
           <p class="eyebrow">Tổng quan theo tháng</p>
-          <h2>Tổng quan lịch làm</h2>
+          <div class="admin-month-title-row">
+            <h2>Tổng quan lịch làm</h2>
+            <div id="adminMonthTitle" class="admin-month-title" aria-live="polite"></div>
+          </div>
         </div>
-        <div class="month-actions">
-          <button id="adminPrevMonthBtn" class="btn secondary" type="button">← Tháng trước</button>
-          <button id="adminTodayBtn" class="btn ghost" type="button">Tháng này</button>
-          <button id="adminNextMonthBtn" class="btn secondary" type="button">Tháng sau →</button>
+        <div class="admin-month-toolbar">
+          <div class="month-actions" aria-label="Điều hướng tháng">
+            <button id="adminPrevMonthBtn" class="btn secondary" type="button">← Tháng trước</button>
+            <button id="adminTodayBtn" class="btn ghost" type="button">Tháng này</button>
+            <button id="adminNextMonthBtn" class="btn secondary" type="button">Tháng sau →</button>
+          </div>
+          <button id="openExcelExportBtn" class="btn primary excel-launch-btn" type="button">Tải bảng chấm công tháng</button>
         </div>
       </div>
-      <div id="adminMonthTitle" class="admin-month-title"></div>
+      <div class="admin-scope-toolbar">
+        <label>
+          Khu vực
+          <select id="adminAreaFilter"><option value="">Tất cả khu vực</option></select>
+        </label>
+        <label>
+          Team
+          <select id="adminTeamFilter"><option value="">Tất cả team</option></select>
+        </label>
+        <div id="adminScopeNote" class="admin-scope-note">Đang tải phạm vi dữ liệu...</div>
+      </div>
       <div class="calendar-legend admin-legend">
         <span><i class="dot dot-pending"></i> Chờ duyệt</span>
         <span><i class="dot dot-approved"></i> Đã duyệt</span>
@@ -168,6 +168,7 @@
               <th><input id="checkAllSchedule" type="checkbox" /></th>
               <th>Nhân sự</th>
               <th>Loại</th>
+              <th>Khu vực</th>
               <th>Team</th>
               <th>Ngày</th>
               <th>Ca</th>
@@ -198,6 +199,8 @@
             <tr>
               <th><input id="checkAllLeave" type="checkbox" /></th>
               <th>Nhân sự</th>
+              <th>Khu vực</th>
+              <th>Team</th>
               <th>Ngày nghỉ</th>
               <th>Ca</th>
               <th>Lý do</th>
@@ -217,7 +220,7 @@
           <p class="eyebrow">Lịch chính thức</p>
           <h2>Danh sách lịch trong tuần</h2>
         </div>
-        <button id="exportCsvBtn" class="btn ghost">Tải CSV</button>
+        <button id="exportCsvBtn" class="btn ghost">Tải CSV tuần</button>
       </div>
 
       <div class="table-wrap">
@@ -226,6 +229,7 @@
             <tr>
               <th>Nhân sự</th>
               <th>Loại</th>
+              <th>Khu vực</th>
               <th>Team</th>
               <th>Ngày</th>
               <th>Ca</th>
@@ -251,6 +255,71 @@
   </main>
 
 
+
+  <div id="profileManagerModal" class="uws-modal hidden">
+    <div class="uws-modal-backdrop" data-close-profile-manager></div>
+    <div class="uws-modal-card profile-manager-modal-card">
+      <div class="modal-head profile-manager-head">
+        <div>
+          <p class="eyebrow">SUPER ADMIN</p>
+          <h2>Quản lý hồ sơ nhân sự</h2>
+          <p class="muted">Tìm theo mã, họ tên, email, vai trò, khu vực hoặc team rồi chỉnh sửa trực tiếp.</p>
+        </div>
+        <button class="modal-close" type="button" data-close-profile-manager aria-label="Đóng">×</button>
+      </div>
+      <div class="profile-manager-toolbar">
+        <label class="profile-search-field">
+          <span>Tìm kiếm tài khoản</span>
+          <input id="profileSearchInput" type="search" placeholder="Nhập mã, họ tên, email, khu vực, team..." autocomplete="off" />
+        </label>
+        <button id="profileSearchBtn" class="btn secondary" type="button">Tìm kiếm</button>
+        <button id="refreshProfilesModalBtn" class="btn ghost" type="button">Làm mới</button>
+      </div>
+      <div id="profileSearchSummary" class="profile-search-summary"></div>
+      <div class="table-wrap profile-settings-wrap profile-manager-table-wrap">
+        <table class="profile-settings-table">
+          <thead>
+            <tr>
+              <th>Mã</th><th>Họ tên hiển thị</th><th>Email</th><th>Vai trò</th><th>Khu vực</th><th>Team</th><th>Chỉ tiêu tháng</th><th>Trạng thái</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="profileSettingsTable"></tbody>
+        </table>
+      </div>
+      <p id="profileSettingsMessage" class="message" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div id="excelExportModal" class="uws-modal hidden">
+    <div class="uws-modal-backdrop" data-close-excel-export></div>
+    <div class="uws-modal-card excel-export-modal-card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Báo cáo tháng</p>
+          <h2>Tải lịch làm Excel</h2>
+          <p class="muted">File gồm lịch chi tiết, bảng tổng hợp nhân sự và danh sách xin nghỉ.</p>
+        </div>
+        <button class="modal-close" type="button" data-close-excel-export aria-label="Đóng">×</button>
+      </div>
+      <div class="form-grid excel-export-grid">
+        <label>Tháng báo cáo <input id="excelExportMonth" type="month" /></label>
+        <label>Khu vực <select id="excelExportArea"><option value="">Tất cả khu vực</option></select></label>
+        <label>Team <select id="excelExportTeam"><option value="">Tất cả team</option></select></label>
+        <label>Trạng thái lịch
+          <select id="excelExportStatus">
+            <option value="approved">Chỉ lịch đã duyệt</option>
+            <option value="all">Đã duyệt + chờ duyệt</option>
+          </select>
+        </label>
+      </div>
+      <div class="excel-export-note" id="excelExportScopeNote"></div>
+      <div class="actions modal-actions">
+        <button id="downloadExcelBtn" class="btn primary" type="button">Tạo và tải file Excel</button>
+        <button class="btn ghost" type="button" data-close-excel-export>Hủy</button>
+      </div>
+      <p id="excelExportMessage" class="message" aria-live="polite"></p>
+    </div>
+  </div>
 
   <div id="deleteScheduleModal" class="uws-modal hidden">
     <div class="uws-modal-backdrop" data-close-delete-modal></div>
@@ -325,7 +394,8 @@
     </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./js/config.js?v=20"></script>
-  <script src="./js/admin.js?v=20"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./js/config.js?v=24"></script>
+  <script src="./js/admin.js?v=24"></script>
 </body>
 </html>

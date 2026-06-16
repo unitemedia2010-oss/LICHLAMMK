@@ -1,81 +1,167 @@
-if (!window.UWS) {
-  const loginMessage = document.getElementById("loginMessage");
-  if (loginMessage) {
-    loginMessage.textContent = "config.js chưa chạy. Kiểm tra lại file index.html và CDN Supabase.";
-    loginMessage.className = "message err";
-  }
-  throw new Error("window.UWS is not available");
-}
+"use strict";
 
-const { supabase, ADMIN_ROLES, showMessage } = window.UWS;
+(() => {
+  if (window.__UWS_AUTH_V19_INITIALIZED__) return;
+  window.__UWS_AUTH_V19_INITIALIZED__ = true;
 
-const form = document.getElementById("loginForm");
-const emailEl = document.getElementById("email");
-const passwordEl = document.getElementById("password");
-const msg = document.getElementById("loginMessage");
+  const state = {
+    busy: false,
+    initialized: false
+  };
 
-console.log("auth.js loaded");
+  function init() {
+    if (state.initialized) return;
+    state.initialized = true;
 
-async function redirectIfLoggedIn() {
-  const { data } = await supabase.auth.getUser();
-  if (!data?.user) return;
+    const UWS = window.UWS;
+    const form = document.getElementById("loginForm");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const messageEl = document.getElementById("loginMessage");
+    const submitButton = document.getElementById("loginBtn") || form?.querySelector('button[type="submit"]');
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role_type")
-    .eq("id", data.user.id)
-    .single();
+    if (!UWS?.supabase) {
+      const text = "Không khởi tạo được Supabase. Hãy tải lại trang bằng Ctrl + F5.";
+      if (messageEl) {
+        messageEl.textContent = text;
+        messageEl.className = "message err";
+      }
+      console.error(text);
+      return;
+    }
 
-  if (profile && ADMIN_ROLES.includes(profile.role_type)) {
-    window.location.href = "./admin.html";
-  } else if (profile) {
-    window.location.href = "./employee.html";
-  }
-}
+    if (!form || !emailInput || !passwordInput || !submitButton) {
+      console.error("Thiếu phần tử đăng nhập trong index.html", {
+        form: Boolean(form),
+        email: Boolean(emailInput),
+        password: Boolean(passwordInput),
+        button: Boolean(submitButton)
+      });
+      return;
+    }
 
-form?.addEventListener("submit", async (e) => {
-  e.preventDefault();
+    const { supabase: client, ADMIN_ROLES, showMessage } = UWS;
 
-  const email = emailEl.value.trim();
-  const password = passwordEl.value;
+    function setBusy(value) {
+      state.busy = value;
+      submitButton.disabled = value;
+      submitButton.textContent = value ? "Đang đăng nhập..." : "Đăng nhập";
+      form.setAttribute("aria-busy", value ? "true" : "false");
+    }
 
-  showMessage(msg, "Đang đăng nhập...");
+    function readCredentials() {
+      // form.elements xử lý ổn định hơn với autofill/password manager trên Edge/Chrome.
+      const emailField = form.elements.namedItem("email") || emailInput;
+      const passwordField = form.elements.namedItem("password") || passwordInput;
+      return {
+        email: String(emailField?.value || "").trim().toLowerCase(),
+        password: String(passwordField?.value || "")
+      };
+    }
 
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
+    async function routeByProfile(userId) {
+      const { data: profile, error } = await client
+        .from("profiles")
+        .select("role_type,status")
+        .eq("id", userId)
+        .single();
+
+      if (error || !profile) {
+        await client.auth.signOut();
+        showMessage(messageEl, "Tài khoản đã có trong Authentication nhưng chưa có hồ sơ trong bảng profiles.", "err");
+        return false;
+      }
+
+      if (profile.status !== "active") {
+        await client.auth.signOut();
+        showMessage(messageEl, "Tài khoản đang bị khóa. Vui lòng liên hệ Admin/HR.", "err");
+        return false;
+      }
+
+      window.location.assign(ADMIN_ROLES.includes(profile.role_type) ? "./admin.html" : "./employee.html");
+      return true;
+    }
+
+    async function handleLogin(event) {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      if (state.busy) return false;
+
+      // Cho trình duyệt một nhịp để đồng bộ giá trị autofill vào DOM.
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      const { email, password } = readCredentials();
+
+      if (!email || !password) {
+        showMessage(messageEl, "Vui lòng nhập đầy đủ email và mật khẩu.", "err");
+        (!email ? emailInput : passwordInput).focus();
+        return false;
+      }
+
+      setBusy(true);
+      showMessage(messageEl, "Đang xác thực tài khoản...");
+
+      try {
+        const { data, error } = await client.auth.signInWithPassword({ email, password });
+        if (error) {
+          showMessage(messageEl, `Đăng nhập không thành công: ${error.message}`, "err");
+          return false;
+        }
+
+        if (!data?.user?.id) {
+          showMessage(messageEl, "Supabase không trả về thông tin người dùng.", "err");
+          return false;
+        }
+
+        showMessage(messageEl, "Đăng nhập thành công. Đang chuyển trang...", "ok");
+        await routeByProfile(data.user.id);
+      } catch (error) {
+        console.error("UWS login error:", error);
+        showMessage(messageEl, `Không kết nối được hệ thống: ${error?.message || error}`, "err");
+      } finally {
+        setBusy(false);
+      }
+
+      return false;
+    }
+
+    // Global fallback cho onsubmit trong HTML.
+    window.UWSLogin = handleLogin;
+
+    // Dùng onsubmit property thay vì chỉ addEventListener để tránh handler bị mất
+    // khi Live Server/browser extension thay đổi DOM trong lúc phát triển.
+    form.onsubmit = handleLogin;
+
+    // Fallback cho trường hợp trình duyệt/password manager nuốt submit event.
+    submitButton.addEventListener("click", event => {
+      event.preventDefault();
+      handleLogin(event);
     });
 
-    if (error) {
-      showMessage(msg, "Đăng nhập không thành công: " + error.message, "err");
-      return;
-    }
+    // Cho phép Enter trong cả hai ô.
+    [emailInput, passwordInput].forEach(input => {
+      input.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          handleLogin(event);
+        }
+      });
+    });
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", data.user.id)
-      .single();
-
-    if (profileError || !profile) {
-      showMessage(msg, "Tài khoản đã có trong Auth nhưng chưa có hồ sơ trong bảng profiles.", "err");
-      return;
-    }
-
-    showMessage(msg, "Đăng nhập thành công. Đang chuyển trang...", "ok");
-
-    setTimeout(() => {
-      if (ADMIN_ROLES.includes(profile.role_type)) {
-        window.location.href = "./admin.html";
-      } else {
-        window.location.href = "./employee.html";
+    (async () => {
+      try {
+        const { data } = await client.auth.getUser();
+        if (data?.user?.id) await routeByProfile(data.user.id);
+      } catch (error) {
+        console.warn("Không kiểm tra được phiên đăng nhập cũ:", error);
       }
-    }, 500);
-  } catch (err) {
-    console.error(err);
-    showMessage(msg, "Lỗi JavaScript: " + err.message, "err");
-  }
-});
+    })();
 
-redirectIfLoggedIn();
+    console.info("UWS auth v19 ready");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  } else {
+    init();
+  }
+})();

@@ -4,10 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Unite Work Schedule | Nhân sự</title>
-  <link rel="stylesheet" href="./css/style.css?v=15" />
-  <link rel="stylesheet" href="./css/v13-enterprise-responsive.css?v=15" />
-  <link rel="stylesheet" href="./css/v14-responsive-hotfix.css?v=15" />
-  <link rel="stylesheet" href="./css/v15-monthly-draft.css?v=15" />
+  <link rel="stylesheet" href="./css/app.css?v=23" />
 </head>
 <body>
   <header class="topbar">
@@ -102,7 +99,7 @@
         <div id="monthCalendar" class="month-calendar"></div>
       </div>
 
-      <p id="calendarMessage" class="message"></p>
+      <p id="calendarMessage" class="message" aria-live="polite"></p>
     </section>
 
     <section id="draftReviewPanel" class="panel draft-review-panel">
@@ -122,7 +119,7 @@
       <div id="draftReviewList" class="draft-review-list">
         <div class="empty-row">Chưa chọn lịch cho ngày nào.</div>
       </div>
-      <p id="draftReviewMessage" class="message"></p>
+      <p id="draftReviewMessage" class="message" aria-live="polite"></p>
     </section>
 
     <section class="panel">
@@ -165,7 +162,7 @@
         </div>
 
         <button id="saveUnavailableBtn" class="btn secondary" type="button">Lưu lịch bận</button>
-        <p id="unavailableMessage" class="message"></p>
+        <p id="unavailableMessage" class="message" aria-live="polite"></p>
       </div>
 
       <div id="tabMine" class="tab-panel">
@@ -261,7 +258,7 @@
         <button class="btn ghost" type="button" data-close-modal>Đóng</button>
       </div>
 
-      <p id="registerMessage" class="message"></p>
+      <p id="registerMessage" class="message" aria-live="polite"></p>
     </div>
   </div>
 
@@ -302,7 +299,7 @@
         <button class="btn ghost" type="button" data-close-modal>Hủy</button>
       </div>
 
-      <p id="leaveMessage" class="message"></p>
+      <p id="leaveMessage" class="message" aria-live="polite"></p>
     </div>
   </div>
 
@@ -356,7 +353,7 @@
         <button class="btn ghost" type="button" data-close-modal>Hủy</button>
       </div>
 
-      <p id="profileMessage" class="message"></p>
+      <p id="profileMessage" class="message" aria-live="polite"></p>
     </div>
   </div>
 
@@ -398,11 +395,11 @@
         <button class="btn ghost" type="button" data-close-modal>Hủy</button>
       </div>
 
-      <p id="changePasswordMessage" class="message"></p>
+      <p id="changePasswordMessage" class="message" aria-live="polite"></p>
     </div>
   </div>
-
-  <script src="./js/config.js?v=15"></script>
-  <script src="./js/employee.js?v=15"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./js/config.js?v=23"></script>
+  <script src="./js/employee.js?v=23"></script>
 </body>
 </html>
