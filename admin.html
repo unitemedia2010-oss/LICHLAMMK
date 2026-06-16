@@ -4,10 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Unite Work Schedule | Admin</title>
-  <link rel="stylesheet" href="./css/style.css?v=15" />
-  <link rel="stylesheet" href="./css/v13-enterprise-responsive.css?v=15" />
-  <link rel="stylesheet" href="./css/v14-responsive-hotfix.css?v=15" />
-  <link rel="stylesheet" href="./css/v15-monthly-draft.css?v=15" />
+  <link rel="stylesheet" href="./css/app.css?v=20" />
 </head>
 <body>
   <header class="topbar admin">
@@ -86,7 +83,7 @@
           <button id="createAccountBtn" class="btn primary" type="button">Tạo tài khoản</button>
           <button id="clearAccountFormBtn" class="btn ghost" type="button">Xóa form</button>
         </div>
-        <p id="createAccountMessage" class="message"></p>
+        <p id="createAccountMessage" class="message" aria-live="polite"></p>
       </div>
 
       <div class="section-head compact-head account-table-head">
@@ -113,13 +110,13 @@
           <tbody id="profileSettingsTable"></tbody>
         </table>
       </div>
-      <p id="profileSettingsMessage" class="message"></p>
+      <p id="profileSettingsMessage" class="message" aria-live="polite"></p>
     </section>
 
 
 
 
-    <section class="panel">
+    <section class="panel admin-month-panel">
       <div class="section-head">
         <div>
           <p class="eyebrow">Tổng quan theo tháng</p>
@@ -180,7 +177,7 @@
           <tbody id="pendingScheduleTable"></tbody>
         </table>
       </div>
-      <p id="adminScheduleMessage" class="message"></p>
+      <p id="adminScheduleMessage" class="message" aria-live="polite"></p>
     </section>
 
     <section class="panel">
@@ -211,7 +208,7 @@
           <tbody id="pendingLeaveTable"></tbody>
         </table>
       </div>
-      <p id="adminLeaveMessage" class="message"></p>
+      <p id="adminLeaveMessage" class="message" aria-live="polite"></p>
     </section>
 
     <section class="panel">
@@ -282,7 +279,7 @@
         <button class="btn ghost" type="button" data-close-delete-modal>Hủy</button>
       </div>
 
-      <p id="deleteScheduleMessage" class="message"></p>
+      <p id="deleteScheduleMessage" class="message" aria-live="polite"></p>
     </div>
   </div>
 
@@ -324,11 +321,11 @@
         <button class="btn ghost" type="button" data-close-password-modal>Hủy</button>
       </div>
 
-      <p id="changePasswordMessage" class="message"></p>
+      <p id="changePasswordMessage" class="message" aria-live="polite"></p>
     </div>
   </div>
-
-  <script src="./js/config.js?v=15"></script>
-  <script src="./js/admin.js?v=15"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./js/config.js?v=20"></script>
+  <script src="./js/admin.js?v=20"></script>
 </body>
 </html>
