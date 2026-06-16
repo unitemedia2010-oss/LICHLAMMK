@@ -1,4 +1,4 @@
--- UNITE WORK SCHEDULE V23 - consolidated database setup
+-- UNITE WORK SCHEDULE V16 - consolidated database setup
 -- Run once in Supabase SQL Editor. It is written to be safe on an existing project.
 
 begin;
@@ -12,7 +12,6 @@ create table if not exists public.profiles (
   email text unique not null,
   phone text,
   role_type text not null check (role_type in ('TTS', 'NVPT', 'LEADER', 'ADMIN', 'SUPER_ADMIN')),
-  area text,
   team text,
   status text not null default 'active' check (status in ('active', 'inactive')),
   min_days_per_month integer not null default 12 check (min_days_per_month between 0 and 31),
@@ -20,7 +19,6 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles add column if not exists phone text;
-alter table public.profiles add column if not exists area text;
 alter table public.profiles add column if not exists status text not null default 'active';
 alter table public.profiles add column if not exists min_days_per_month integer not null default 12;
 alter table public.profiles add column if not exists created_at timestamptz not null default now();
@@ -355,8 +353,8 @@ create policy "Super admins can delete notifications" on public.notifications fo
   using (public.is_super_admin_user());
 
 -- Bootstrap the existing main admin if that Auth user already exists.
-insert into public.profiles (id, employee_code, full_name, email, phone, role_type, area, team, status, min_days_per_month)
-select u.id, 'ADMIN001', 'Nguyễn Phi Trường', 'unitemedia2010@gmail.com', '', 'SUPER_ADMIN', null, 'MEDIA', 'active', 0
+insert into public.profiles (id, employee_code, full_name, email, phone, role_type, team, status, min_days_per_month)
+select u.id, 'ADMIN001', 'Nguyễn Phi Trường', 'unitemedia2010@gmail.com', '', 'SUPER_ADMIN', 'MEDIA', 'active', 0
 from auth.users u
 where lower(u.email) = 'unitemedia2010@gmail.com'
 on conflict (id) do update set

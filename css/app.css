@@ -2139,6 +2139,57 @@ tbody tr:hover td { background: #fbfbfc; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
 
+/* Admin profile settings popup + monthly Excel export */
+.profile-settings-modal-card {
+  width: min(1120px, 100%);
+}
+
+.profile-settings-modal-card .account-table-head {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.profile-settings-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.profile-search-field {
+  min-width: 0;
+}
+
+.profile-results-count {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.month-actions.has-export {
+  align-items: center;
+}
+
+.export-month-excel-btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .profile-settings-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .month-actions.has-export {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .month-actions.has-export .btn {
+    width: 100%;
+  }
+}
+
 /* ===== Source: v14-responsive-hotfix(1).css ===== */
 /* =========================================================
    V14 RESPONSIVE HOTFIX
@@ -2999,310 +3050,85 @@ button:disabled,
   display: none;
 }
 
-/* =========================================
-   V21 - PROFILE MANAGER MODAL + EXCEL EXPORT
-========================================= */
-body.modal-open {
-  overflow: hidden;
+/* V21: keep the monthly Excel action readable inside the month toolbar. */
+.month-actions.has-export .export-month-excel-btn,
+.month-actions.has-export .export-month-excel-btn:disabled {
+  min-width: 154px;
+  padding-inline: 16px;
+  border: 0;
+  background: var(--v13-brand) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 16px rgba(111, 32, 48, .16);
+  opacity: 1;
+  text-align: center;
 }
 
-.profile-manager-launcher {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-top: 20px;
-  padding: 18px;
-  border: 1px solid var(--v13-line, #e5e7eb);
-  border-radius: 18px;
-  background: linear-gradient(135deg, #faf7f3, #fff);
+.month-actions.has-export .export-month-excel-btn:hover:not(:disabled) {
+  background: #5c1927 !important;
 }
 
-.profile-manager-launcher h3 {
-  margin: 2px 0 5px;
-  font-size: 18px;
-}
-
-.profile-manager-modal-card {
-  width: min(1180px, 100%);
-  max-height: calc(100dvh - 36px);
-  padding: 24px;
-}
-
-.profile-manager-head {
-  margin-bottom: 14px;
-}
-
-.profile-manager-toolbar {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto auto;
-  align-items: end;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.profile-search-field {
-  position: relative;
-}
-
-.profile-search-field input {
-  min-height: 46px;
-  padding-left: 42px;
-  background:
-    linear-gradient(90deg, transparent 0 40px, #e9ecef 40px 41px, transparent 41px),
-    #fff;
-}
-
-.profile-search-field::after {
-  content: "⌕";
-  position: absolute;
-  left: 14px;
-  bottom: 9px;
-  color: var(--primary-color);
-  font-size: 23px;
-  line-height: 1;
-  pointer-events: none;
-}
-
-.profile-search-summary {
-  min-height: 24px;
-  margin-bottom: 8px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.profile-manager-table-wrap {
-  max-height: min(58dvh, 620px);
-  overflow: auto;
-  border: 1px solid var(--v13-line, #e5e7eb);
-  border-radius: 16px;
-}
-
-.profile-manager-table-wrap table {
-  margin: 0;
-}
-
-.profile-manager-table-wrap thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #f5f6f8;
-  box-shadow: inset 0 -1px #dde1e6;
-}
-
-.profile-manager-table-wrap tbody tr:hover {
-  background: #fcf8f5;
-}
-
-.excel-export-modal-card {
-  width: min(720px, 100%);
-}
-
-.excel-export-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.excel-export-note {
-  margin-top: 14px;
-  padding: 13px 15px;
-  border: 1px solid #eadfd3;
-  border-radius: 14px;
-  background: #fbf7f2;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 650;
-}
-
-#openExcelExportBtn {
-  white-space: nowrap;
-}
-
-@media (max-width: 780px) {
-  .profile-manager-launcher,
-  .profile-manager-toolbar {
-    grid-template-columns: 1fr;
-    display: grid;
-    align-items: stretch;
-  }
-
-  .profile-manager-launcher .btn,
-  .profile-manager-toolbar .btn {
-    width: 100%;
-  }
-
-  .profile-manager-modal-card {
-    padding: 16px;
-  }
-
-  .profile-manager-table-wrap {
-    max-height: 62dvh;
-  }
-
-  .excel-export-grid {
-    grid-template-columns: 1fr;
-  }
-
-  #openExcelExportBtn {
-    width: 100%;
-  }
-}
-
-
-/* =========================================
-   V23 - STABLE MONTH TOOLBAR + AREA SCOPE
-========================================= */
-.admin-month-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.admin-month-toolbar .month-actions {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-.admin-month-toolbar .excel-launch-btn {
-  flex: 0 0 auto;
-  min-height: 46px;
-  white-space: nowrap;
-}
-.admin-scope-toolbar {
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(180px, 240px) minmax(240px, 1fr);
-  align-items: end;
-  gap: 12px;
-  margin: 12px 0 14px;
-  padding: 14px;
-  border: 1px solid var(--v13-line, #e5e7eb);
-  border-radius: 16px;
-  background: var(--v13-surface-soft, #f8f9fa);
-}
-.admin-scope-toolbar label { margin: 0; }
-.admin-scope-toolbar select { min-height: 42px; }
-.admin-scope-note {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  padding: 9px 12px;
-  border-radius: 12px;
-  background: #fff;
-  color: var(--text-muted, #746760);
-  font-size: 12px;
-  font-weight: 700;
-}
-.profile-settings-table .profile-area-input,
-.profile-settings-table .profile-team-input { min-width: 150px; }
-.excel-export-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-@media (max-width: 980px) {
-  .section-head:has(.admin-month-toolbar) {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .admin-month-toolbar {
-    width: 100%;
-    justify-content: space-between;
-  }
-  .admin-month-toolbar .month-actions { flex: 1 1 auto; }
-  .admin-scope-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-scope-note { grid-column: 1 / -1; }
+.month-actions.has-export .export-month-excel-btn:disabled {
+  background: #8b5b64 !important;
+  opacity: .86;
 }
 
 @media (max-width: 760px) {
-  .admin-month-toolbar { display: grid; grid-template-columns: 1fr; }
-  .admin-month-toolbar .month-actions {
+  .month-actions.has-export {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .month-actions.has-export .export-month-excel-btn {
+    grid-column: 1 / -1;
     width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .admin-month-toolbar .month-actions .btn {
     min-width: 0;
-    padding-inline: 6px;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
-  .admin-month-toolbar .excel-launch-btn { width: 100%; }
-  .admin-scope-toolbar { grid-template-columns: 1fr; }
-  .admin-scope-note { grid-column: auto; }
-  .excel-export-grid { grid-template-columns: 1fr; }
 }
 
-/* =========================================
-   V24 - SCOPED MONTH OVERVIEW HEADER
-========================================= */
-.admin-month-overview .admin-month-overview-head {
-  align-items: center;
-  margin-bottom: 16px;
+/* V21: rebalance the admin monthly summary heading. */
+.admin-month-panel .section-head {
+  margin-bottom: 10px;
 }
 
-.admin-month-overview .admin-month-overview-copy {
-  min-width: 0;
-  flex: 1 1 auto;
+.admin-month-panel .section-head h2 {
+  margin-bottom: 0;
 }
 
-.admin-month-overview .admin-month-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.admin-month-overview .admin-month-title-row h2 {
-  margin: 0;
-}
-
-.admin-month-overview .admin-month-title {
+.admin-month-panel .admin-month-title {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-height: 32px;
-  margin: 0;
-  padding: 7px 11px;
-  border: 1px solid rgba(111, 32, 48, .14);
+  margin: 0 0 14px;
+  padding: 6px 11px;
+  border: 1px solid var(--v13-line);
   border-radius: 999px;
-  color: var(--v13-brand, #6f2030);
-  background: var(--v13-brand-soft, #f8eef0);
-  font-size: 12px;
+  background: #fff;
+  color: var(--v13-brand);
+  font-size: 13px;
   font-weight: 800;
-  line-height: 1;
   letter-spacing: 0;
-  white-space: nowrap;
+  box-shadow: var(--v13-shadow-xs);
 }
 
-.admin-month-overview .admin-month-title::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: .72;
+.admin-month-panel .admin-month-title::before {
+  content: "Đang xem";
+  color: var(--v13-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
 }
 
-.admin-month-overview .admin-month-toolbar {
-  align-self: center;
-}
-
-@media (max-width: 980px) {
-  .admin-month-overview .admin-month-overview-head {
-    align-items: stretch;
-  }
-}
-
-@media (max-width: 560px) {
-  .admin-month-overview .admin-month-title-row {
-    align-items: flex-start;
-    gap: 8px;
+@media (max-width: 760px) {
+  .admin-month-panel .section-head {
+    gap: 10px;
+    margin-bottom: 10px;
   }
 
-  .admin-month-overview .admin-month-title {
-    min-height: 30px;
-    padding: 6px 10px;
-    font-size: 11px;
+  .admin-month-panel .admin-month-title {
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 12px;
+    font-size: 12px;
   }
 }
-

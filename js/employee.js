@@ -1254,7 +1254,7 @@ function renderProfileHeader() {
 
   if (welcomeName) welcomeName.textContent = `Xin chào, ${displayName}`;
   if (profileLine) {
-    profileLine.textContent = `${currentProfile?.employee_code || "Chưa có mã"} • ${currentProfile?.role_type || ""} • ${currentProfile?.area || "Chưa có khu vực"} • ${currentProfile?.team || "Chưa có team"}`;
+    profileLine.textContent = `${currentProfile?.employee_code || "Chưa có mã"} • ${currentProfile?.role_type || ""} • ${currentProfile?.team || "Chưa có team"}`;
   }
   if (targetDaysEl) targetDaysEl.textContent = currentProfile?.min_days_per_month || 0;
 }

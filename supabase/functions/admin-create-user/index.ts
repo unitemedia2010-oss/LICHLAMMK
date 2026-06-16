@@ -71,7 +71,6 @@ Deno.serve(async (req: Request) => {
   const employeeCode = String(payload.employee_code || "").trim().toUpperCase();
   const fullName = String(payload.full_name || "").trim();
   const roleType = String(payload.role_type || "TTS").trim().toUpperCase();
-  const area = String(payload.area || "").trim() || null;
   const team = String(payload.team || "").trim() || null;
   const status = String(payload.status || "active").trim().toLowerCase();
   const minDays = Number(payload.min_days_per_month ?? 12);
@@ -82,7 +81,6 @@ Deno.serve(async (req: Request) => {
   if (fullName.length < 2 || fullName.length > 120) return json({ message: "Họ tên chưa hợp lệ." }, 422);
   if (!ALLOWED_ROLES.has(roleType)) return json({ message: "Vai trò chưa hợp lệ." }, 422);
   if (!ALLOWED_STATUS.has(status)) return json({ message: "Trạng thái chưa hợp lệ." }, 422);
-  if (roleType === "LEADER" && (!area || !team)) return json({ message: "LEADER cần có đủ Khu vực và Team." }, 422);
   if (!Number.isInteger(minDays) || minDays < 0 || minDays > 31) return json({ message: "Chỉ tiêu tháng phải từ 0 đến 31 ngày." }, 422);
 
   const [emailLookup, codeLookup] = await Promise.all([
@@ -105,7 +103,6 @@ Deno.serve(async (req: Request) => {
       employee_code: employeeCode,
       full_name: fullName,
       role_type: roleType,
-      area,
       team
     }
   });
@@ -122,7 +119,6 @@ Deno.serve(async (req: Request) => {
     email,
     phone: null,
     role_type: roleType,
-    area,
     team,
     status,
     min_days_per_month: minDays
